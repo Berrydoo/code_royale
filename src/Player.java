@@ -162,6 +162,7 @@ class TrainingDecisionMaker implements DecisionMaker {
     List<Site> sites;
     List<Structure> structures;
     List<Unit> units;
+    Utils utils;
 
     public TrainingDecisionMaker(int gold, int touchedSite, List<Site> sites, List<Structure> structures, List<Unit> units ){
         this.gold = gold;
@@ -169,6 +170,7 @@ class TrainingDecisionMaker implements DecisionMaker {
         this.sites = sites;
         this.structures = structures;
         this.units = units;
+        this.utils = new Utils(structures, units, sites);
     }
 
     public void decide(){
