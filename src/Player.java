@@ -1,7 +1,6 @@
 import java.util.*;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
-import java.io.*;
-import java.math.*;
 
 
 class Player {
@@ -96,11 +95,13 @@ interface DecisionMaker {
 
 class QueenDecisionMaker implements DecisionMaker {
 
-    int gold;
-    int touchedSite;
-    List<Site> sites;
-    List<Structure> structures;
-    List<Unit> units;
+    private int gold;
+    private final int touchedSite;
+    private List<Site> sites;
+    private List<Structure> structures;
+    private List<Unit> units;
+
+    Utils utils;
 
     public QueenDecisionMaker( int gold, int touchedSite, List<Site> sites, List<Structure> structures, List<Unit> units ){
         this.gold = gold;
@@ -108,6 +109,7 @@ class QueenDecisionMaker implements DecisionMaker {
         this.sites = sites;
         this.structures = structures;
         this.units = units;
+        this.utils = new Utils(structures, units, sites);
     }
 
     public void decide(){
@@ -127,16 +129,7 @@ class QueenDecisionMaker implements DecisionMaker {
 
     private boolean siteIsEmpty( int siteId){
         // log("siteIsEmpty " + siteId);
-        return getStructureBySiteId(siteId).structureType == Constants.EMPTY_SITE;
-    }
-
-    private Structure getStructureBySiteId(int siteId ){
-
-        // log("getStructureBySiteId " + siteId);
-        return this.structures.stream()
-                .filter( s -> s.siteId == siteId)
-                .findAny()
-                .orElse(null);
+        return utils.getStructureBySiteId(siteId).structureType == Constants.EMPTY_SITE;
     }
 
     private void buildStructure(){
@@ -151,91 +144,12 @@ class QueenDecisionMaker implements DecisionMaker {
 
     private void move(){
         // log("move");
-        Site closestEmptySite = getClosestEmptySite();
+        Site closestEmptySite = utils.getClosestSiteToUnit(Predicates.emptyOrBarracksStructure, Predicates.enemyOrNoOwner, Predicates.friendlyUnit, Predicates.queenUnitType);
         if( Objects.nonNull(closestEmptySite) ){
             System.out.println("MOVE " + closestEmptySite.x + " " + closestEmptySite.y);
         } else {
-            Site closestOppSite = getClosestOpponentSite();
-            if( Objects.nonNull(closestOppSite) ){
-                System.out.println("MOVE " + closestOppSite.x + " " + closestOppSite.y);
-            } else {
-                System.out.println("WAIT");
-            }
+            System.out.println("WAIT");
         }
-    }
-
-    private Site getClosestEmptySite(){
-        // log("getClosestEmptySite");
-        Structure structure = this.structures.stream()
-                .filter( s -> s.structureType == Constants.NO_STRUCTURE )
-                .min( (s1, s2) -> Double.compare(getDistanceFromQueen(s1), getDistanceFromQueen(s2) ) )
-                .get();
-
-        if( Objects.nonNull(structure) ){
-            Site site = getSiteById( structure.siteId );
-            Logger.log("Closest Structure: " + site.x + ", " + site.y);
-            return site;
-        } else {
-            return null;
-        }
-    }
-
-    private Site getClosestOpponentSite(){
-
-        // log("getClosestOpponentSite");
-        Structure structure = this.structures.stream()
-                .filter( s -> s.structureType == Constants.NO_STRUCTURE )
-                .min( (s1, s2) -> Double.compare(getDistanceFromQueen(s1), getDistanceFromQueen(s2) ) )
-                .get();
-
-        if( Objects.nonNull(structure)){
-            return getSiteById( structure.siteId );
-        } else {
-            return null;
-        }
-    }
-
-    private double getDistanceFromQueen(Structure structure){
-
-        // log("getDistanceFromQueen " + structure);
-
-        Unit queen = findFriendlyUnitByUnitType(Constants.QUEEN);
-        Site site = getSiteById(structure.siteId);
-
-        int yDiff = Math.max(queen.y, site.y) - Math.min(queen.y, site.y);
-        int xDiff = Math.max(queen.x, site.x) - Math.min(queen.x, site.x);
-
-        return Math.sqrt( (yDiff*yDiff) + (xDiff*xDiff) );
-
-    }
-
-    private Unit findFriendlyUnitByUnitType( int type){
-
-        // log("findUnitByType " + type);
-        return this.units.stream()
-                .filter( u -> u.owner == Constants.FRIENDLY_OWNER)
-                .filter( u -> u.unitType == type)
-                .findFirst()
-                .get();
-    }
-
-    private Unit findEnemyUnitByUnitType( int type){
-
-        // log("findUnitByType " + type);
-        return this.units.stream()
-                .filter( u -> u.owner == Constants.ENEMY_OWNER)
-                .filter( u -> u.unitType == type)
-                .findFirst()
-                .get();
-    }
-
-    private Site getSiteById( int siteId){
-
-        // log("getSiteById " + siteId);
-        return this.sites.stream()
-                .filter( s -> s.siteId == siteId)
-                .findAny()
-                .orElse(null);
     }
 
 }
@@ -260,7 +174,8 @@ class TrainingDecisionMaker implements DecisionMaker {
     public void decide(){
 
         // log("makeTrainingDecision");
-        List<Structure> friends = getAllFriendlyStructures();
+
+        List<Structure> friends = getStructures(Predicates.friendlyStructure);
 
         if( capableOfTraining(friends.size()) ) {
             if( allUnitTypesAvailable() ){
@@ -277,9 +192,9 @@ class TrainingDecisionMaker implements DecisionMaker {
 
     }
 
-    private List<Structure> getAllFriendlyStructures(){
+    private List<Structure> getStructures(Predicate<? super Structure> structurePredicate){
         return this.structures.stream()
-                .filter( s -> s.owner == Constants.FRIENDLY_OWNER)
+                .filter( structurePredicate )
                 .collect(Collectors.toList());
     }
 
@@ -404,11 +319,100 @@ class Constants {
     static int EMPTY_SITE = -1;
     static int NOT_TOUCHING = -1;
     static int NO_STRUCTURE = -1;
+    static int BARRACKS = 2;
     static int QUEEN = -1;
     static int KNIGHT = 0;
     static int ARCHER = 1;
     static int FRIENDLY_OWNER = 0;
     static int ENEMY_OWNER = 1;
+    static int NO_OWNER = -1;
     static int ARCHER_COST = 100;
     static int KNIGHT_COST = 80;
+}
+
+class Predicates {
+    public static final Predicate<Structure> friendlyStructure = s -> s.owner == Constants.FRIENDLY_OWNER;
+    public static final Predicate<Structure> enemyStructure = s -> s.owner == Constants.ENEMY_OWNER;
+    public static final Predicate<Structure> noOwner = s -> s.owner == Constants.NO_OWNER;
+    public static final Predicate<Structure> enemyOrNoOwner = s -> (s.owner == Constants.NO_OWNER) || (s.owner == Constants.ENEMY_OWNER);
+
+    public static final Predicate<Structure> emptyStructure = s -> s.structureType == Constants.NO_STRUCTURE;
+    public static final Predicate<Structure> barracksStructure = s -> s.structureType == Constants.BARRACKS;
+    public static final Predicate<Structure> emptyOrBarracksStructure = s -> (s.structureType == Constants.NO_STRUCTURE) || (s.structureType == Constants.BARRACKS) ;
+
+    public static final Predicate<Unit> friendlyUnit = s -> s.owner == Constants.FRIENDLY_OWNER;
+    public static final Predicate<Unit> queenUnitType = s -> s.unitType == Constants.QUEEN;
+
+}
+
+class Utils {
+
+    private final List<Structure> structures;
+    private final List<Unit> units;
+    private final List<Site> sites;
+
+    public Utils( List<Structure> structures, List<Unit> units, List<Site> sites){
+        this.structures = structures;
+        this.units = units;
+        this.sites = sites;
+    }
+
+    public Site getClosestSiteToUnit(Predicate<? super Structure> structureType, Predicate<? super Structure> structureOwner, Predicate<? super Unit> unitType, Predicate<? super Unit> unitOwner){
+
+        Structure structure = this.structures.stream()
+                .filter( structureType )
+                .filter( structureOwner )
+                .min( (s1, s2) -> Double.compare(getDistanceFromUnitToSite(s1.siteId, unitOwner, unitType),
+                                                 getDistanceFromUnitToSite(s2.siteId, unitOwner, unitType)))
+                .orElse(null);
+
+        if( Objects.nonNull(structure) ){
+            Site site = getSiteById( structure.siteId );
+            Logger.log("Closest Structure: " + site.x + ", " + site.y);
+            return site;
+        } else {
+            return null;
+        }
+    }
+
+    public double getDistanceFromUnitToSite(int siteId, Predicate<? super Unit> unitType, Predicate<? super Unit> unitOwner ){
+
+        // log("getDistanceFromQueen " + structure);
+
+        Unit unit = findUnitByTypeAndOwner(unitType, unitOwner );
+        Site site = getSiteById(siteId);
+
+        int yDiff = Math.max(unit.y, site.y) - Math.min(unit.y, site.y);
+        int xDiff = Math.max(unit.x, site.x) - Math.min(unit.x, site.x);
+
+        return Math.sqrt( (yDiff*yDiff) + (xDiff*xDiff) );
+
+    }
+
+    public Unit findUnitByTypeAndOwner( Predicate<? super Unit> unitType, Predicate<? super Unit> unitOwner ){
+        return this.units.stream()
+                .filter( unitType )
+                .filter( unitOwner )
+                .findFirst()
+                .orElse(null);
+
+    }
+
+    public Site getSiteById( int siteId){
+
+        // log("getSiteById " + siteId);
+        return this.sites.stream()
+                .filter( s -> s.siteId == siteId)
+                .findAny()
+                .orElse(null);
+    }
+
+    public Structure getStructureBySiteId(int siteId ){
+
+        // log("getStructureBySiteId " + siteId);
+        return this.structures.stream()
+                .filter( s -> s.siteId == siteId)
+                .findAny()
+                .orElse(null);
+    }
 }
