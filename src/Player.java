@@ -181,15 +181,24 @@ class TrainingDecisionMaker implements DecisionMaker {
 
         if( capableOfTraining(friends.size()) ) {
             if( allUnitTypesAvailable() ){
-                if(getWhichTypeToBuild() == Constants.KNIGHT){
-                    System.out.println("TRAIN " + getFactoryClosestToEnemyQueen(getWhichTypeToBuild()));
+                int targetType = getWhichTypeToBuild();
+                if(targetType == Constants.KNIGHT){
+                    Logger.log("train knight closest to enemy queen");
+                    System.out.println("TRAIN " + getKnightFactoryClosestToEnemyQueen());
                 } else {
-                    System.out.println("TRAIN " + getFactoryClosestToFriendlyQueen(getWhichTypeToBuild()));
+                    Logger.log("train archer closest to our queen");
+                    System.out.println("TRAIN " + getArcherFactoryClosestToFriendlyQueen());
                 }
             } else {
-                System.out.println("TRAIN " + getFactoryClosestToFriendlyQueen(getWhichTypeIsAvailable()));
+                Logger.log("train the one type available, closest to our queen");
+                if( archerTypeIsAvailable() ){
+                    System.out.println("TRAIN " + getArcherFactoryClosestToFriendlyQueen());
+                } else if ( knightTypeIsAvailable()){
+                    System.out.println("TRAIN " + getKnightFactoryClosestToEnemyQueen());
+                }
             }
         } else {
+            Logger.log("cannot train");
             System.out.println("TRAIN");
         }
 
@@ -208,6 +217,9 @@ class TrainingDecisionMaker implements DecisionMaker {
 
     private boolean allUnitTypesAvailable(){
         boolean knightAvailable = this.structures.stream().filter(s -> s.owner == Constants.FRIENDLY_OWNER).anyMatch( s -> s.siteId % 2 == Constants.KNIGHT);
+
+
+
         boolean archerAvailable = this.structures.stream().filter(s -> s.owner == Constants.FRIENDLY_OWNER).anyMatch( s -> s.siteId % 2 == Constants.ARCHER);
 
         boolean result = knightAvailable && archerAvailable;
@@ -219,50 +231,34 @@ class TrainingDecisionMaker implements DecisionMaker {
         long archerCount = this.units.stream().filter( unit -> unit.unitType == Constants.ARCHER).count();
         long knightCount = this.units.stream().filter( unit -> unit.unitType == Constants.KNIGHT).count()/2;
 
-        int result = archerCount > knightCount ? Constants.KNIGHT : Constants.ARCHER;
-        Logger.log("Archer Count: "  + archerCount + ", Knight Count: " + knightCount + ", Target type: " + result);
-        return result;
-    }
-
-    private int getWhichTypeIsAvailable(){
-        long archerCount = this.units.stream().filter( unit -> unit.unitType == Constants.ARCHER).count();
-        long knightCount = this.units.stream().filter( unit -> unit.unitType == Constants.KNIGHT).count()/2;
-
         int result;
-        if( archerCount == 0 ){
+        if( archerCount >= knightCount ){
             result = Constants.KNIGHT;
-        } else if ( knightCount == 0 ){
-            result = Constants.ARCHER;
         } else {
-            result = archerCount > knightCount ? Constants.KNIGHT : Constants.ARCHER;
+            result = Constants.ARCHER;
         }
-        Logger.log("Archer Count: "  + archerCount + ", Knight Count: " + knightCount + ", Target type: " + result);
+        Logger.log("Archer Count: "  + archerCount + ", Knight Count: " + knightCount + ", Target type: " + query.unitTypeOf(result));
         return result;
     }
 
-    private int getFactoryClosestToEnemyQueen(int targetUnitType){
-
-        if ( targetUnitType == Constants.ARCHER){
-            Site closestSite = query.getClosestFromListToUnit(query.getStructuresOfTargetType(Predicates.factoryTypeArcher, Predicates.friendlyStructure),
-                                                                Predicates.barracksStructure, Predicates.friendlyStructure, Predicates.queenUnitType, Predicates.enemyUnit);
-            return closestSite.siteId;
-        } else {
-            Site closestSite = query.getClosestFromListToUnit(query.getStructuresOfTargetType(Predicates.factoryTypeKnight, Predicates.friendlyStructure),
-                                                                Predicates.barracksStructure, Predicates.friendlyStructure, Predicates.queenUnitType, Predicates.enemyUnit);
-            return closestSite.siteId;
-        }
+    private boolean knightTypeIsAvailable(){
+        return !query.getStructuresOfTargetType(Predicates.factoryTypeKnight, Predicates.friendlyStructure).isEmpty();
     }
 
-    private int getFactoryClosestToFriendlyQueen(int targetUnitType){
-        if ( targetUnitType == Constants.ARCHER){
+    private boolean archerTypeIsAvailable(){
+        return !query.getStructuresOfTargetType(Predicates.factoryTypeArcher, Predicates.friendlyStructure).isEmpty();
+    }
+
+    private int getKnightFactoryClosestToEnemyQueen(){
+            Site closestSite = query.getClosestFromListToUnit(query.getStructuresOfTargetType(Predicates.factoryTypeKnight, Predicates.friendlyStructure),
+                                                                Predicates.barracksStructure, Predicates.friendlyStructure, Predicates.queenUnitType, Predicates.enemyUnit);
+            return closestSite.siteId;
+    }
+
+    private int getArcherFactoryClosestToFriendlyQueen(){
             Site closestSite = query.getClosestFromListToUnit(query.getStructuresOfTargetType(Predicates.factoryTypeArcher, Predicates.friendlyStructure),
                     Predicates.barracksStructure, Predicates.friendlyStructure, Predicates.queenUnitType, Predicates.friendlyUnit);
             return closestSite.siteId;
-        } else {
-            Site closestSite = query.getClosestFromListToUnit(query.getStructuresOfTargetType(Predicates.factoryTypeKnight, Predicates.friendlyStructure),
-                    Predicates.barracksStructure, Predicates.friendlyStructure, Predicates.queenUnitType, Predicates.friendlyUnit);
-            return closestSite.siteId;
-        }
     }
 
 }
@@ -385,16 +381,15 @@ class Query {
     public Site getClosestFromListToUnit(List<Structure> structures, Predicate<? super Structure> structureType,
                                          Predicate<? super Structure> structureOwner, Predicate<? super Unit> unitType, Predicate<? super Unit> unitOwner ){
 
-        Structure structure = this.structures.stream()
+        Structure structure = structures.stream()
                 .filter( structureType )
                 .filter( structureOwner )
-                .min( (s1, s2) -> Double.compare(getDistanceFromUnitToSite(s1.siteId, unitOwner, unitType),
-                                                 getDistanceFromUnitToSite(s2.siteId, unitOwner, unitType)))
+                .min(Comparator.comparingDouble(s -> getDistanceFromUnitToSite(s.siteId, unitOwner, unitType)))
                 .orElse(null);
 
         if( Objects.nonNull(structure) ){
             Site site = getSiteById( structure.siteId );
-            Logger.log("Closest Structure: " + site.x + ", " + site.y);
+            Logger.log("Closest Structure: Site " + site.siteId + ", X:" + site.x + ", Y:" + site.y);
             return site;
         } else {
             return null;
@@ -456,4 +451,10 @@ class Query {
         Logger.log("Structs of target type: " + structsOfType.stream().map(s -> s.siteId).map(String::valueOf).collect(Collectors.joining(", ") )  );
         return structsOfType;
     }
+
+    public String unitTypeOf(int unitType){
+        return unitType == Constants.ARCHER ? "Archer" : "Knight";
+    }
+
+
 }
