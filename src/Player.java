@@ -101,7 +101,7 @@ class QueenDecisionMaker implements DecisionMaker {
     private List<Structure> structures;
     private List<Unit> units;
 
-    Utils utils;
+    Query query;
 
     public QueenDecisionMaker( int gold, int touchedSite, List<Site> sites, List<Structure> structures, List<Unit> units ){
         this.gold = gold;
@@ -109,7 +109,7 @@ class QueenDecisionMaker implements DecisionMaker {
         this.sites = sites;
         this.structures = structures;
         this.units = units;
-        this.utils = new Utils(structures, units, sites);
+        this.query = new Query(structures, units, sites);
     }
 
     public void decide(){
@@ -129,7 +129,7 @@ class QueenDecisionMaker implements DecisionMaker {
 
     private boolean siteIsEmpty( int siteId){
         // log("siteIsEmpty " + siteId);
-        return utils.getStructureBySiteId(siteId).structureType == Constants.EMPTY_SITE;
+        return query.getStructureBySiteId(siteId).structureType == Constants.EMPTY_SITE;
     }
 
     private void buildStructure(){
@@ -144,7 +144,7 @@ class QueenDecisionMaker implements DecisionMaker {
 
     private void move(){
         // log("move");
-        Site closestEmptySite = utils.getClosestSiteToUnit(Predicates.emptyOrBarracksStructure, Predicates.enemyOrNoOwner, Predicates.friendlyUnit, Predicates.queenUnitType);
+        Site closestEmptySite = query.getClosestSiteToUnit(Predicates.emptyOrBarracksStructure, Predicates.enemyOrNoOwner, Predicates.friendlyUnit, Predicates.queenUnitType);
         if( Objects.nonNull(closestEmptySite) ){
             System.out.println("MOVE " + closestEmptySite.x + " " + closestEmptySite.y);
         } else {
@@ -162,7 +162,7 @@ class TrainingDecisionMaker implements DecisionMaker {
     List<Site> sites;
     List<Structure> structures;
     List<Unit> units;
-    Utils utils;
+    Query query;
 
     public TrainingDecisionMaker(int gold, int touchedSite, List<Site> sites, List<Structure> structures, List<Unit> units ){
         this.gold = gold;
@@ -170,7 +170,7 @@ class TrainingDecisionMaker implements DecisionMaker {
         this.sites = sites;
         this.structures = structures;
         this.units = units;
-        this.utils = new Utils(structures, units, sites);
+        this.query = new Query(structures, units, sites);
     }
 
     public void decide(){
@@ -181,12 +181,13 @@ class TrainingDecisionMaker implements DecisionMaker {
 
         if( capableOfTraining(friends.size()) ) {
             if( allUnitTypesAvailable() ){
-                int targetType = getWhichTypeToBuild();
-                List<Structure> friendlyStructsOfType = getStructuresOfTargetType(targetType);
-                int targetSiteId = getRandomFriendlySiteId(friendlyStructsOfType);
-                System.out.println("TRAIN " + targetSiteId );
+                if(getWhichTypeToBuild() == Constants.KNIGHT){
+                    System.out.println("TRAIN " + getFactoryClosestToEnemyQueen(getWhichTypeToBuild()));
+                } else {
+                    System.out.println("TRAIN " + getFactoryClosestToFriendlyQueen(getWhichTypeToBuild()));
+                }
             } else {
-                System.out.println("TRAIN " + getRandomFriendlySiteId(friends) );
+                System.out.println("TRAIN " + getFactoryClosestToFriendlyQueen(getWhichTypeIsAvailable()));
             }
         } else {
             System.out.println("TRAIN");
@@ -223,27 +224,45 @@ class TrainingDecisionMaker implements DecisionMaker {
         return result;
     }
 
-    private List<Structure> getStructuresOfTargetType( int targetType){
+    private int getWhichTypeIsAvailable(){
+        long archerCount = this.units.stream().filter( unit -> unit.unitType == Constants.ARCHER).count();
+        long knightCount = this.units.stream().filter( unit -> unit.unitType == Constants.KNIGHT).count()/2;
 
-        List<Structure> structsOfType =  this.structures.stream()
-                .filter( s -> s.owner == Constants.FRIENDLY_OWNER)
-                .filter( s -> s.siteId % 2 == targetType)
-                .collect(Collectors.toList());
-        Logger.log("Structs of target type: " + structsOfType.stream().map(s -> s.siteId).map(String::valueOf).collect(Collectors.joining(", ") )  );
-        return structsOfType;
+        int result;
+        if( archerCount == 0 ){
+            result = Constants.KNIGHT;
+        } else if ( knightCount == 0 ){
+            result = Constants.ARCHER;
+        } else {
+            result = archerCount > knightCount ? Constants.KNIGHT : Constants.ARCHER;
+        }
+        Logger.log("Archer Count: "  + archerCount + ", Knight Count: " + knightCount + ", Target type: " + result);
+        return result;
     }
 
-    private int getRandomFriendlySiteId(List<Structure> friends){
-        Double index = getRandomIndexOfFriend(friends.size());
-        int selectedSite = friends.get(index.intValue()).siteId;
+    private int getFactoryClosestToEnemyQueen(int targetUnitType){
 
-        Logger.log("Selected site for new unit: " + selectedSite);
-        return selectedSite;
-
+        if ( targetUnitType == Constants.ARCHER){
+            Site closestSite = query.getClosestFromListToUnit(query.getStructuresOfTargetType(Predicates.factoryTypeArcher, Predicates.friendlyStructure),
+                                                                Predicates.barracksStructure, Predicates.friendlyStructure, Predicates.queenUnitType, Predicates.enemyUnit);
+            return closestSite.siteId;
+        } else {
+            Site closestSite = query.getClosestFromListToUnit(query.getStructuresOfTargetType(Predicates.factoryTypeKnight, Predicates.friendlyStructure),
+                                                                Predicates.barracksStructure, Predicates.friendlyStructure, Predicates.queenUnitType, Predicates.enemyUnit);
+            return closestSite.siteId;
+        }
     }
 
-    private Double getRandomIndexOfFriend(int friendsCount){
-        return Math.random() * (friendsCount-1);
+    private int getFactoryClosestToFriendlyQueen(int targetUnitType){
+        if ( targetUnitType == Constants.ARCHER){
+            Site closestSite = query.getClosestFromListToUnit(query.getStructuresOfTargetType(Predicates.factoryTypeArcher, Predicates.friendlyStructure),
+                    Predicates.barracksStructure, Predicates.friendlyStructure, Predicates.queenUnitType, Predicates.friendlyUnit);
+            return closestSite.siteId;
+        } else {
+            Site closestSite = query.getClosestFromListToUnit(query.getStructuresOfTargetType(Predicates.factoryTypeKnight, Predicates.friendlyStructure),
+                    Predicates.barracksStructure, Predicates.friendlyStructure, Predicates.queenUnitType, Predicates.friendlyUnit);
+            return closestSite.siteId;
+        }
     }
 
 }
@@ -340,26 +359,31 @@ class Predicates {
 
     public static final Predicate<Structure> emptyStructure = s -> s.structureType == Constants.NO_STRUCTURE;
     public static final Predicate<Structure> barracksStructure = s -> s.structureType == Constants.BARRACKS;
-    public static final Predicate<Structure> emptyOrBarracksStructure = s -> (s.structureType == Constants.NO_STRUCTURE) || (s.structureType == Constants.BARRACKS) ;
+    public static final Predicate<Structure> emptyOrBarracksStructure = s -> (s.structureType == Constants.NO_STRUCTURE) || (s.structureType == Constants.BARRACKS);
+
+    public static final Predicate<Structure> factoryTypeArcher = s -> s.siteId % 2 == Constants.ARCHER;
+    public static final Predicate<Structure> factoryTypeKnight = s -> s.siteId % 2 == Constants.KNIGHT;
 
     public static final Predicate<Unit> friendlyUnit = s -> s.owner == Constants.FRIENDLY_OWNER;
+    public static final Predicate<Unit> enemyUnit = s -> s.owner == Constants.ENEMY_OWNER;
     public static final Predicate<Unit> queenUnitType = s -> s.unitType == Constants.QUEEN;
 
 }
 
-class Utils {
+class Query {
 
     private final List<Structure> structures;
     private final List<Unit> units;
     private final List<Site> sites;
 
-    public Utils( List<Structure> structures, List<Unit> units, List<Site> sites){
+    public Query(List<Structure> structures, List<Unit> units, List<Site> sites){
         this.structures = structures;
         this.units = units;
         this.sites = sites;
     }
 
-    public Site getClosestSiteToUnit(Predicate<? super Structure> structureType, Predicate<? super Structure> structureOwner, Predicate<? super Unit> unitType, Predicate<? super Unit> unitOwner){
+    public Site getClosestFromListToUnit(List<Structure> structures, Predicate<? super Structure> structureType,
+                                         Predicate<? super Structure> structureOwner, Predicate<? super Unit> unitType, Predicate<? super Unit> unitOwner ){
 
         Structure structure = this.structures.stream()
                 .filter( structureType )
@@ -375,6 +399,11 @@ class Utils {
         } else {
             return null;
         }
+
+    }
+
+    public Site getClosestSiteToUnit(Predicate<? super Structure> structureType, Predicate<? super Structure> structureOwner, Predicate<? super Unit> unitType, Predicate<? super Unit> unitOwner){
+        return getClosestFromListToUnit(this.structures, structureType, structureOwner, unitType, unitOwner);
     }
 
     public double getDistanceFromUnitToSite(int siteId, Predicate<? super Unit> unitType, Predicate<? super Unit> unitOwner ){
@@ -416,5 +445,15 @@ class Utils {
                 .filter( s -> s.siteId == siteId)
                 .findAny()
                 .orElse(null);
+    }
+
+    public List<Structure> getStructuresOfTargetType(Predicate<? super Structure> factoryType, Predicate<? super Structure> structureOwner){
+
+        List<Structure> structsOfType =  this.structures.stream()
+                .filter( structureOwner )
+                .filter( factoryType )
+                .collect(Collectors.toList());
+        Logger.log("Structs of target type: " + structsOfType.stream().map(s -> s.siteId).map(String::valueOf).collect(Collectors.joining(", ") )  );
+        return structsOfType;
     }
 }
