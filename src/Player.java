@@ -177,27 +177,15 @@ class TrainingDecisionMaker implements DecisionMaker {
 
         // log("makeTrainingDecision");
 
-        List<Structure> friendlyStructures = getStructures(Predicates.friendlyStructure);
+        List<Structure> friendlyBarracks = getStructures(Predicates.friendlyStructure, Predicates.barracksStructure);
 
         printUnitCounts();
 
-        if( capableOfTraining(friendlyStructures.size()) ) {
+        if( capableOfTraining(friendlyBarracks.size()) ) {
             if( allUnitTypesAvailable() ){
-                int targetType = getWhichTypeToBuild();
-                if(targetType == Constants.KNIGHT){
-                    Logger.log("train knight closest to enemy queen");
-                    System.out.println("TRAIN " + getKnightFactoryClosestToEnemyQueen());
-                } else {
-                    Logger.log("train archer closest to our queen");
-                    System.out.println("TRAIN " + getArcherFactoryClosestToFriendlyQueen());
-                }
+                chooseAmongAllUnitTypes();
             } else {
-                Logger.log("train the one type available, closest to our queen");
-                if( archerTypeIsAvailable() ){
-                    System.out.println("TRAIN " + getArcherFactoryClosestToFriendlyQueen());
-                } else if ( knightTypeIsAvailable()){
-                    System.out.println("TRAIN " + getKnightFactoryClosestToEnemyQueen());
-                }
+                chooseAvailableUnitType();
             }
         } else {
             noTraining();
@@ -230,9 +218,10 @@ class TrainingDecisionMaker implements DecisionMaker {
         System.out.println("TRAIN");
     }
 
-    private List<Structure> getStructures(Predicate<? super Structure> structurePredicate){
+    private List<Structure> getStructures(Predicate<? super Structure> owner, Predicate<? super Structure> structureType){
         return this.structures.stream()
-                .filter( structurePredicate )
+                .filter( owner )
+                .filter( structureType )
                 .collect(Collectors.toList());
     }
 
