@@ -109,7 +109,9 @@ class QueenDecisionTests {
 
         tests.isInstanceOf();
         tests.canBuildStructure();
-        tests.getNextStructureType();
+        tests.getNextStructureType_archer();
+        tests.getNextStructureType_knight();
+        tests.getNextStructureType_tower();
     }
 
     public void isInstanceOf(){
@@ -123,11 +125,47 @@ class QueenDecisionTests {
         logPassed("canBuildStructure");
     }
 
-    public void getNextStructureType(){
-        assertEquals("ARCHER", target.getNextStructureType());
-        logPassed("getNextStructureType");
+    public void getNextStructureType_archer(){
+        target.touchedSite = 1;
+        assertEquals(" BARRACKS-ARCHER", target.getNextStructureType());
+        logPassed("getNextStructureType_archer");
+    }
+
+    public void getNextStructureType_knight(){
+        target.touchedSite = 2;
+        assertEquals(" BARRACKS-KNIGHT", target.getNextStructureType());
+        logPassed("getNextStructureType_knight");
+    }
+
+    public void getNextStructureType_tower(){
+        target.touchedSite = 3;
+        assertEquals(" TOWER", target.getNextStructureType());
+        logPassed("getNextStructureType_tower");
     }
 }
+
+class TrainingDecisionTests {
+
+    private final TrainingDecisionMaker target;
+
+    public TrainingDecisionTests( TrainingDecisionMaker target){
+        this.target = target;
+    }
+
+    public static void main(String[] strings) {
+        TestUtils utils = new TestUtils();
+        TrainingDecisionMaker target = new TrainingDecisionMaker(utils.gold, utils.touchedSite, utils.sites, utils.structures, utils.units);
+        TrainingDecisionTests tests = new TrainingDecisionTests(target);
+
+        tests.getWhichTypeToBuild();
+//        tests.isInstanceOf();
+    }
+
+    public void getWhichTypeToBuild(){
+        int type = target.getWhichTypeToBuild();
+    }
+}
+
 
 class TestUtils {
 
@@ -170,10 +208,11 @@ class TestUtils {
     Unit archer6 = new Unit(350, 100, Constants.ENEMY_OWNER, Constants.ARCHER, 100 );
     Unit badUnit = new Unit(901, 901, 10, 20, 0);
 
-    List<Unit> units = Arrays.asList(queen1, queen2, knight1, knight2, knight3, knight4, knight5, knight6, archer1, archer2, archer3, archer4, archer5, archer6);
+    List<Unit> units = Arrays.asList(queen1, queen2, knight1, knight2, knight3, knight4, knight5, knight6, archer1, archer2, archer3, archer4, archer5, archer6, badUnit);
 
     public static void logPassed(String msg){
         System.out.println(msg + " passed");
     }
+
 }
 
