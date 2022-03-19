@@ -112,7 +112,7 @@ class QueenDecisionMaker implements DecisionMaker {
         if( canBuildStructure() ){
             buildStructure();
         } else {
-            move();
+            System.out.println(move());
         }
     }
 
@@ -130,25 +130,59 @@ class QueenDecisionMaker implements DecisionMaker {
 
     protected void buildStructure(){
         // log("buildStructure");
-        System.out.println("BUILD " + this.touchedSite + getNextStructureType());
+        System.out.println("BUILD " + this.touchedSite + " " + getNextStructureType());
     }
 
     protected String getNextStructureType(){
-        // log("getNextStructureType");
-        if ( this.touchedSite % 3 == 0 ) {
-            return " TOWER";
+
+        int archFact = query.getAllStructuresOfType(Predicates.factoryTypeArcher, Predicates.friendlyStructure).size();
+        int knightFact = query.getAllStructuresOfType(Predicates.factoryTypeKnight, Predicates.friendlyStructure).size();
+        int giantFact = query.getAllStructuresOfType(Predicates.factoryTypeGiant, Predicates.friendlyStructure).size();
+        int towers = query.getAllStructuresOfType(Predicates.towerStructure, Predicates.friendlyStructure).size();
+
+        if( query.areEqual(knightFact, archFact, giantFact, towers)){
+            return "BARRACKS-KNIGHT";
+        } else if( query.isLessOrEqual(knightFact, archFact, giantFact, towers)) {
+            return "BARRACKS-KNIGHT";
+        } else if( query.isLessOrEqual(archFact, knightFact, giantFact, towers)) {
+            return "BARRACKS-ARCHER";
+        } else if( query.isLessOrEqual(giantFact, knightFact, archFact, towers)) {
+            return "BARRACKS-GIANT";
+        } else if( query.isLessOrEqual(towers, knightFact, archFact, giantFact)) {
+            return "TOWER";
         } else {
-            return this.touchedSite % 2 == 0 ? " BARRACKS-KNIGHT" : " BARRACKS-ARCHER";
+            return "BARRACKS-KNIGHT";
         }
     }
 
-    protected void move(){
+    protected String move(){
         // log("move");
-        Site closestEmptySite = query.getClosestSiteToUnit(Predicates.emptyOrBarracksStructure, Predicates.enemyOrNoOwner, Predicates.friendlyUnit, Predicates.queenUnitType);
-        if( Objects.nonNull(closestEmptySite) ){
-            System.out.println("MOVE " + closestEmptySite.x + " " + closestEmptySite.y);
+        Unit queen = query.findUnitByTypeAndOwner(Predicates.queenUnitType, Predicates.friendlyUnit);
+        List<Structure> allTowers = query.getAllStructuresOfType(Predicates.towerStructure, Predicates.friendlyStructure);
+        List<Structure> archerFactories = query.getAllStructuresOfType(Predicates.factoryTypeArcher, Predicates.friendlyStructure);
+
+        if( queen.health < 40 ) {
+            if( !allTowers.isEmpty() ){
+                Site targetSite = query.getClosestFromListToUnit(allTowers, Predicates.towerStructure, Predicates.friendlyStructure, Predicates.queenUnitType, Predicates.friendlyUnit);
+                return "MOVE " + targetSite.x + " " + targetSite.y;
+            } else if(!archerFactories.isEmpty()) {
+                Site targetSite = query.getClosestFromListToUnit( archerFactories, Predicates.factoryTypeArcher, Predicates.friendlyStructure,Predicates.queenUnitType, Predicates.friendlyUnit );
+                return "MOVE " + targetSite.x + " " + targetSite.y;
+            } else {
+                Site targetSite = query.getClosestSiteToUnit(Predicates.emptyOrBarracksStructure, Predicates.enemyOrNoOwner, Predicates.friendlyUnit, Predicates.queenUnitType);
+                if (Objects.nonNull(targetSite)) {
+                    return "MOVE " + targetSite.x + " " + targetSite.y;
+                } else {
+                    return "WAIT";
+                }
+            }
         } else {
-            System.out.println("WAIT");
+            Site targetSite = query.getClosestSiteToUnit(Predicates.emptyOrBarracksStructure, Predicates.enemyOrNoOwner, Predicates.friendlyUnit, Predicates.queenUnitType);
+            if (Objects.nonNull(targetSite)) {
+                return "MOVE " + targetSite.x + " " + targetSite.y;
+            } else {
+                return "WAIT";
+            }
         }
     }
 
@@ -179,9 +213,9 @@ class TrainingDecisionMaker implements DecisionMaker {
         printUnitCounts();
 
         int targetUnitType = getWhichTypeToBuild();
+        int friendlyStructuresCount = query.getAllStructuresOfType(Predicates.barracksStructure, Predicates.friendlyStructure).size();
 
-        if( capableOfTraining(getStructures(Predicates.friendlyStructure, Predicates.barracksStructure).size(), targetUnitType ) ){
-//            String trainingString = getTargetTrainingString(targetUnitType);
+        if( capableOfTraining( friendlyStructuresCount, targetUnitType ) ){
             String siteString;
             if( targetUnitType == Constants.GIANT){
                 siteString = getGiantFactoryClosestToEnemyQueen();
@@ -197,98 +231,59 @@ class TrainingDecisionMaker implements DecisionMaker {
 
     }
 
-    private void chooseAmongAllUnitTypes(){
-        int targetType = getWhichTypeToBuild();
-        if(targetType == Constants.KNIGHT && knightTypeIsAvailable() ){
-            Logger.log("train knight closest to enemy queen");
-            System.out.println("TRAIN " + getKnightFactoryClosestToEnemyQueen());
-        } else if( archerTypeIsAvailable() ){
-            Logger.log("train archer closest to our queen");
-            System.out.println("TRAIN " + getArcherFactoryClosestToFriendlyQueen());
-        }
-    }
-
-    private void chooseAvailableUnitType(){
-        Logger.log("train the one type available, closest to our queen");
-        if( archerTypeIsAvailable() ){
-            System.out.println("TRAIN " + getArcherFactoryClosestToFriendlyQueen());
-        } else if ( knightTypeIsAvailable()){
-            System.out.println("TRAIN " + getKnightFactoryClosestToEnemyQueen());
-        }
-    }
-
-    protected String getTargetTrainingString(int targetType){
-
-        if( targetType == Constants.GIANT){
-            return "GIANT";
-        } else if( targetType == Constants.ARCHER){
-            return "ARCHER";
-        } else if ( targetType == Constants.KNIGHT){
-            return "KNIGHT";
-        } else {
-            return "";
-        }
-
-    }
-
     private void noTraining(){
         Logger.log("cannot train");
         System.out.println("TRAIN");
     }
 
-    private List<Structure> getStructures(Predicate<? super Structure> owner, Predicate<? super Structure> structureType){
-        return this.structures.stream()
-                .filter( owner )
-                .filter( structureType )
-                .collect(Collectors.toList());
-    }
-
-    private boolean capableOfTraining(int friendsCount, int targetUnitType){
+    protected boolean capableOfTraining(int friendsCount, int targetUnitType){
         return friendsCount > 0
                 && this.gold >= ( targetUnitType == Constants.ARCHER ? Constants.ARCHER_COST : targetUnitType == Constants.GIANT ? Constants.GIANT_COST : Constants.KNIGHT_COST )
-
-                && this.gold >= Constants.ARCHER_COST;
+                && factoryAvailable(targetUnitType);
     }
 
-    private boolean allUnitTypesAvailable(){
-        boolean knightAvailable = this.structures.stream().filter(s -> s.owner == Constants.FRIENDLY_OWNER).anyMatch( s -> s.siteId % 2 == Constants.KNIGHT);
-        boolean archerAvailable = this.structures.stream().filter(s -> s.owner == Constants.FRIENDLY_OWNER).anyMatch( s -> s.siteId % 2 == Constants.ARCHER);
-
-        boolean result = knightAvailable && archerAvailable;
-        Logger.log("All types available: " + result);
-        return result;
+    protected boolean factoryAvailable(int targetUnitType){
+        if( targetUnitType == Constants.ARCHER ){
+            return query.getAllStructuresOfType(Predicates.factoryTypeArcher, Predicates.friendlyStructure).size() > 0;
+        } else if (targetUnitType == Constants.KNIGHT){
+            return query.getAllStructuresOfType(Predicates.factoryTypeKnight, Predicates.friendlyStructure).size() > 0;
+        } else {
+            return query.getAllStructuresOfType(Predicates.factoryTypeGiant, Predicates.friendlyStructure).size() > 0;
+        }
     }
 
     protected int getWhichTypeToBuild(){
 
-        int result;
+        int result = 0;
 
-//        int enemyKnightsNorm = query.getAllUnitsOfType(Predicates.knightUnitType, Predicates.enemyUnit).size()/4;
-//        int enemyArchersNorm = query.getAllUnitsOfType(Predicates.archerUnitType, Predicates.enemyUnit).size()/2;
-        int enemyGiantsNorm = query.getAllUnitsOfType(Predicates.giantUnitType, Predicates.enemyUnit).size();
-//        int enemyFactories = query.getAllStructuresOfType(Predicates.barracksStructure, Predicates.enemyStructure).size();
+        int K = query.getAllUnitsOfType(this.units, Predicates.knightUnitType, Predicates.friendlyUnit).size();
+        int A = query.getAllUnitsOfType(this.units, Predicates.archerUnitType, Predicates.friendlyUnit).size();
+        int G = query.getAllUnitsOfType(this.units, Predicates.giantUnitType, Predicates.friendlyUnit).size();
+        int eT = query.getAllStructuresOfType(Predicates.towerStructure, Predicates.enemyStructure).size();
 
-        int friendlyKnightsNorm = query.getAllUnitsOfType(Predicates.knightUnitType, Predicates.friendlyUnit).size()/4;
-        int friendlyArchersNorm = query.getAllUnitsOfType(Predicates.archerUnitType, Predicates.friendlyUnit).size()/2;
-        int friendlyGiantsNorm = query.getAllUnitsOfType(Predicates.giantUnitType, Predicates.friendlyUnit).size();
-//        int friendlyFactories = query.getAllStructuresOfType(Predicates.barracksStructure, Predicates.friendlyStructure).size();
+        Logger.log("Current Count: Knights: " + K + ", Archers: " + A + ", Giants: " + G);
 
-        if( enemyGiantsNorm > friendlyGiantsNorm){
-            result = Constants.GIANT;
+        int normalizedKnights = K / 4;
+        int normalizedArchers = A / 2;
+        int normalizedGiants = G;
+        int normalizedETowers = eT;
+
+        if(areEqual(normalizedArchers,normalizedKnights) && areEqual(normalizedKnights, normalizedGiants)){
+            result = Constants.KNIGHT;
         } else {
-            result = friendlyKnightsNorm >= friendlyArchersNorm ? Constants.KNIGHT : Constants.ARCHER;
+            if(areEqual(normalizedArchers, normalizedKnights) && normalizedETowers > 0){
+                result = Constants.GIANT;
+            } else {
+                result = normalizedArchers > normalizedKnights ? Constants.KNIGHT : Constants.ARCHER;
+            }
         }
 
         Logger.log("Training target: " + query.unitTypeOf(result));
         return result;
     }
 
-    private boolean knightTypeIsAvailable(){
-        return !query.getAllStructuresOfType(Predicates.factoryTypeKnight, Predicates.friendlyStructure).isEmpty();
-    }
-
-    private boolean archerTypeIsAvailable(){
-        return !query.getAllStructuresOfType(Predicates.factoryTypeArcher, Predicates.friendlyStructure).isEmpty();
+    protected boolean areEqual(int val1, int val2){
+        return val1 == val2;
     }
 
     private String getKnightFactoryClosestToEnemyQueen(){
@@ -311,13 +306,13 @@ class TrainingDecisionMaker implements DecisionMaker {
 
     private void printUnitCounts(){
 
-        int enemyKnights = query.getAllUnitsOfType(Predicates.knightUnitType, Predicates.enemyUnit).size();
-        int enemyArchers = query.getAllUnitsOfType(Predicates.archerUnitType, Predicates.enemyUnit).size();
-        int enemyGiants = query.getAllUnitsOfType(Predicates.giantUnitType, Predicates.enemyUnit).size();
+        int enemyKnights = query.getAllUnitsOfType(this.units, Predicates.knightUnitType, Predicates.enemyUnit).size();
+        int enemyArchers = query.getAllUnitsOfType(this.units, Predicates.archerUnitType, Predicates.enemyUnit).size();
+        int enemyGiants = query.getAllUnitsOfType(this.units, Predicates.giantUnitType, Predicates.enemyUnit).size();
         int enemyFactories = query.getAllStructuresOfType(Predicates.barracksStructure, Predicates.enemyStructure).size();
-        int friendlyKnights = query.getAllUnitsOfType(Predicates.knightUnitType, Predicates.friendlyUnit).size();
-        int friendlyArchers = query.getAllUnitsOfType(Predicates.archerUnitType, Predicates.friendlyUnit).size();
-        int friendlyGiants = query.getAllUnitsOfType(Predicates.giantUnitType, Predicates.friendlyUnit).size();
+        int friendlyKnights = query.getAllUnitsOfType(this.units, Predicates.knightUnitType, Predicates.friendlyUnit).size();
+        int friendlyArchers = query.getAllUnitsOfType(this.units, Predicates.archerUnitType, Predicates.friendlyUnit).size();
+        int friendlyGiants = query.getAllUnitsOfType(this.units, Predicates.giantUnitType, Predicates.friendlyUnit).size();
         int friendlyFactories = query.getAllStructuresOfType(Predicates.barracksStructure, Predicates.friendlyStructure).size();
 
 
@@ -414,26 +409,26 @@ class Constants {
 }
 
 class Predicates {
+    public static final Predicate<Structure> noOwner = s -> s.owner == Constants.NO_OWNER;
     public static final Predicate<Structure> friendlyStructure = s -> s.owner == Constants.FRIENDLY_OWNER;
     public static final Predicate<Structure> enemyStructure = s -> s.owner == Constants.ENEMY_OWNER;
-    public static final Predicate<Structure> noOwner = s -> s.owner == Constants.NO_OWNER;
     public static final Predicate<Structure> enemyOrNoOwner = s -> (s.owner == Constants.NO_OWNER) || (s.owner == Constants.ENEMY_OWNER);
 
     public static final Predicate<Structure> emptyStructure = s -> s.structureType == Constants.NO_STRUCTURE;
     public static final Predicate<Structure> barracksStructure = s -> s.structureType == Constants.BARRACKS;
-
     public static final Predicate<Structure> towerStructure = s -> s.structureType == Constants.TOWER;
+
     public static final Predicate<Structure> emptyOrBarracksStructure = s -> (s.structureType == Constants.NO_STRUCTURE) || (s.structureType == Constants.BARRACKS);
 
-    public static final Predicate<Structure> factoryTypeArcher = s -> s.siteId % 2 == Constants.ARCHER;
-    public static final Predicate<Structure> factoryTypeKnight = s -> s.siteId % 2 == Constants.KNIGHT;
-    public static final Predicate<Structure> factoryTypeGiant = s -> s.siteId % 3 == 0;
+    public static final Predicate<Structure> factoryTypeArcher = s -> s.structureType == Constants.BARRACKS && s.param2 == Constants.ARCHER;
+    public static final Predicate<Structure> factoryTypeKnight = s -> s.structureType == Constants.BARRACKS && s.param2 == Constants.KNIGHT;
+    public static final Predicate<Structure> factoryTypeGiant = s -> s.structureType == Constants.BARRACKS && s.param2 == Constants.GIANT;
 
     public static final Predicate<Unit> friendlyUnit = s -> s.owner == Constants.FRIENDLY_OWNER;
     public static final Predicate<Unit> enemyUnit = s -> s.owner == Constants.ENEMY_OWNER;
     public static final Predicate<Unit> queenUnitType = s -> s.unitType == Constants.QUEEN;
-    public static final Predicate<Unit> archerUnitType = s -> s.unitType == Constants.ARCHER;
     public static final Predicate<Unit> knightUnitType = s -> s.unitType == Constants.KNIGHT;
+    public static final Predicate<Unit> archerUnitType = s -> s.unitType == Constants.ARCHER;
     public static final Predicate<Unit> giantUnitType = s -> s.unitType == Constants.GIANT;
 
 }
@@ -520,12 +515,17 @@ class Query {
                 .filter( structureOwner )
                 .filter( factoryType )
                 .collect(Collectors.toList());
-        Logger.log("Structs of target type: " + structsOfType.stream().map(s -> s.siteId).map(String::valueOf).collect(Collectors.joining(", ") )  );
+
+        if( !structsOfType.isEmpty() ){
+            Logger.log("Structs of target type: " + structsOfType.stream().map(s -> s.siteId).map(String::valueOf).collect(Collectors.joining(", ") )  );
+        } else {
+            Logger.log("Structs of target type: None");
+        }
         return structsOfType;
     }
 
-    public List<Unit> getAllUnitsOfType(Predicate<? super Unit> unitType, Predicate<? super Unit> unitOwner){
-        return this.units.stream()
+    public List<Unit> getAllUnitsOfType(List<Unit> units, Predicate<? super Unit> unitType, Predicate<? super Unit> unitOwner){
+        return units.stream()
                 .filter( unitType )
                 .filter( unitOwner )
                 .collect(Collectors.toList());
@@ -544,4 +544,13 @@ class Query {
 
     }
 
+    public boolean areEqual(int val1, int... vals ){
+        return Arrays.stream(vals)
+                .allMatch(val -> val1 == val);
+    }
+
+    public boolean isLessOrEqual(int val1, int... vals ){
+        return Arrays.stream(vals)
+                .allMatch(val -> val1 <= val);
+    }
 }
