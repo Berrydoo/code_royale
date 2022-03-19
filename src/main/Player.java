@@ -1,9 +1,13 @@
+package main;
+
 import java.util.*;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 
 class Player {
+
+    public Player(){}
 
     public static void main(String args[]) {
         Scanner in = new Scanner(System.in);
@@ -95,20 +99,12 @@ interface DecisionMaker {
 
 class QueenDecisionMaker implements DecisionMaker {
 
-    private int gold;
     private final int touchedSite;
-    private List<Site> sites;
-    private List<Structure> structures;
-    private List<Unit> units;
 
     Query query;
 
     public QueenDecisionMaker( int gold, int touchedSite, List<Site> sites, List<Structure> structures, List<Unit> units ){
-        this.gold = gold;
         this.touchedSite = touchedSite;
-        this.sites = sites;
-        this.structures = structures;
-        this.units = units;
         this.query = new Query(structures, units, sites);
     }
 
@@ -120,29 +116,29 @@ class QueenDecisionMaker implements DecisionMaker {
         }
     }
 
-    private boolean canBuildStructure(){
+    protected boolean canBuildStructure(){
 
         // log("canBuildStructure");
         return this.touchedSite != Constants.NOT_TOUCHING
                 && siteIsEmpty(this.touchedSite);
     }
 
-    private boolean siteIsEmpty( int siteId){
+    protected boolean siteIsEmpty( int siteId){
         // log("siteIsEmpty " + siteId);
         return query.getStructureBySiteId(siteId).structureType == Constants.EMPTY_SITE;
     }
 
-    private void buildStructure(){
+    protected void buildStructure(){
         // log("buildStructure");
         System.out.println("BUILD " + this.touchedSite + " BARRACKS-" + getNextStructureType());
     }
 
-    private String getNextStructureType(){
+    protected String getNextStructureType(){
         // log("getNextStructureType");
         return this.touchedSite % 2 == 0 ? "KNIGHT" : "ARCHER";
     }
 
-    private void move(){
+    protected void move(){
         // log("move");
         Site closestEmptySite = query.getClosestSiteToUnit(Predicates.emptyOrBarracksStructure, Predicates.enemyOrNoOwner, Predicates.friendlyUnit, Predicates.queenUnitType);
         if( Objects.nonNull(closestEmptySite) ){
@@ -153,7 +149,6 @@ class QueenDecisionMaker implements DecisionMaker {
     }
 
 }
-
 
 class TrainingDecisionMaker implements DecisionMaker {
 
@@ -177,11 +172,12 @@ class TrainingDecisionMaker implements DecisionMaker {
 
         // log("makeTrainingDecision");
 
-        List<Structure> friendlyBarracks = getStructures(Predicates.friendlyStructure, Predicates.barracksStructure);
-
         printUnitCounts();
 
-        if( capableOfTraining(friendlyBarracks.size()) ) {
+        if( capableOfTraining(
+
+
+                getStructures(Predicates.friendlyStructure, Predicates.barracksStructure).size()) ){
             if( allUnitTypesAvailable() ){
                 chooseAmongAllUnitTypes();
             } else {
@@ -345,19 +341,17 @@ class Structure {
     String ownerText;
     int param1;
     int param2;
-    String factoryType;
 
     public Structure(int siteId, int ig1, int ig2, int structureType, int owner, int param1, int param2){
         this.siteId = siteId;
         this.ignore1 = ig1;
         this.ignore2 = ig2;
         this.structureType = structureType;
-        this.structureText = structureType ==  -1 ? "No Structure" : "Barracks";
+        this.structureText = structureType ==  -1 ? "No main.Structure" : "Barracks";
         this.owner = owner;
-        this.ownerText = owner == -1 ? "No Structure" : owner == 0 ? "Friendly" : "Enemy";
+        this.ownerText = owner == -1 ? "No main.Structure" : owner == 0 ? "Friendly" : "Enemy";
         this.param1 = param1;
         this.param2 = param2;
-        this.factoryType = null;
     }
 
 }
@@ -424,7 +418,7 @@ class Query {
 
         if( Objects.nonNull(structure) ){
             Site site = getSiteById( structure.siteId );
-            Logger.log("Closest Structure: Site " + site.siteId + ", X:" + site.x + ", Y:" + site.y);
+            Logger.log("Closest main.Structure: main.Site " + site.siteId + ", X:" + site.x + ", Y:" + site.y);
             return site;
         } else {
             return null;
@@ -495,7 +489,8 @@ class Query {
     }
 
     public String unitTypeOf(int unitType){
-        return unitType == Constants.ARCHER ? "Archer" : "Knight";
+        return unitType == Constants.ARCHER ? "Archer"
+                : unitType == Constants.KNIGHT ? "Knight" : "Queen";
     }
 
 }
