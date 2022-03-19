@@ -1,8 +1,5 @@
 package main;
 
-import org.junit.Before;
-import org.junit.Test;
-
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.Predicate;
@@ -10,17 +7,24 @@ import java.util.function.Predicate;
 import static org.junit.Assert.*;
 import static main.TestUtils.logPassed;
 
+class TestRunner {
+    public static void main(String[] args){
+        QueryTests.main(new String[]{"run"});
+        QueenDecisionTests.main(new String[]{"run"});
+    }
+}
+
 class QueryTests {
 
-    private Query target;
-    private TestUtils utils;
+    private final Query target;
+    private final TestUtils utils;
 
     public QueryTests( Query target, TestUtils utils){
         this.target = target;
         this.utils = utils;
     }
 
-    public static void main(String[] args){
+    public static void main(String[] strings){
         TestUtils utils = new TestUtils();
         Query target = new Query( utils.structures, utils.units, utils.sites);
         QueryTests queryTests = new QueryTests(target, utils);
@@ -92,18 +96,16 @@ class QueryTests {
 
 class QueenDecisionTests {
 
-    private QueenDecisionMaker target;
-    private TestUtils utils;
+    private final QueenDecisionMaker target;
 
-    public QueenDecisionTests( QueenDecisionMaker target, TestUtils utils){
+    public QueenDecisionTests( QueenDecisionMaker target){
         this.target = target;
-        this.utils = utils;
     }
 
-    public static void main(String[] args){
+    public static void main(String[] strings){
         TestUtils utils = new TestUtils();
         QueenDecisionMaker target = new QueenDecisionMaker(utils.gold, utils.touchedSite, utils.sites, utils.structures, utils.units);
-        QueenDecisionTests tests = new QueenDecisionTests(target, utils);
+        QueenDecisionTests tests = new QueenDecisionTests(target);
 
         tests.isInstanceOf();
         tests.canBuildStructure();
