@@ -156,36 +156,45 @@ class QueenDecisionMaker implements DecisionMaker {
     }
 
     protected String move(){
-        // log("move");
-        Unit queen = query.findUnitByTypeAndOwner(Predicates.queenUnitType, Predicates.friendlyUnit);
+
         List<Structure> allTowers = query.getAllStructuresOfType(Predicates.towerStructure, Predicates.friendlyStructure);
         List<Structure> archerFactories = query.getAllStructuresOfType(Predicates.factoryTypeArcher, Predicates.friendlyStructure);
 
-        if( queen.health < 40 ) {
-            if( !allTowers.isEmpty() ){
-                Site targetSite = query.getClosestFromListToUnit(allTowers, Predicates.towerStructure, Predicates.friendlyStructure, Predicates.queenUnitType, Predicates.friendlyUnit);
-                return "MOVE " + targetSite.x + " " + targetSite.y;
-            } else if(!archerFactories.isEmpty()) {
-                Site targetSite = query.getClosestFromListToUnit( archerFactories, Predicates.factoryTypeArcher, Predicates.friendlyStructure,Predicates.queenUnitType, Predicates.friendlyUnit );
-                return "MOVE " + targetSite.x + " " + targetSite.y;
+        Stats stats = query.getStats();
+
+        if (stats.eKnights > stats.archers ){
+            if ( !allTowers.isEmpty()){
+                return goToClosestTower(allTowers);
+            } else if( !archerFactories.isEmpty() ){
+                return goToClosestArcherFactory(archerFactories);
             } else {
-                Site targetSite = query.getClosestSiteToUnit(Predicates.emptyOrBarracksStructure, Predicates.enemyOrNoOwner, Predicates.friendlyUnit, Predicates.queenUnitType);
-                if (Objects.nonNull(targetSite)) {
-                    return "MOVE " + targetSite.x + " " + targetSite.y;
-                } else {
-                    return "WAIT";
-                }
+                return goToClosestEmptyOrEnemySite();
             }
         } else {
-            Site targetSite = query.getClosestSiteToUnit(Predicates.emptyOrBarracksStructure, Predicates.enemyOrNoOwner, Predicates.friendlyUnit, Predicates.queenUnitType);
-            if (Objects.nonNull(targetSite)) {
-                return "MOVE " + targetSite.x + " " + targetSite.y;
-            } else {
-                return "WAIT";
-            }
+            return goToClosestEmptyOrEnemySite();
         }
     }
 
+    protected String goToClosestTower(List<Structure> allTowers){
+        Site targetSite = query.getClosestFromListToUnit(allTowers, Predicates.towerStructure, Predicates.friendlyStructure, Predicates.queenUnitType, Predicates.friendlyUnit);
+        Structure targetStructure = query.getStructureBySiteId(targetSite.siteId);
+        Logger.log("Safety Tower radius: " + targetStructure.param2);
+        return "BUILD " + targetSite.siteId + " TOWER";
+    }
+
+    protected String goToClosestEmptyOrEnemySite(){
+        Site targetSite = query.getClosestSiteToUnit(Predicates.emptyOrBarracksStructure, Predicates.enemyOrNoOwner, Predicates.friendlyUnit, Predicates.queenUnitType);
+        if (Objects.nonNull(targetSite)) {
+            return "MOVE " + targetSite.x + " " + targetSite.y;
+        } else {
+            return "WAIT";
+        }
+    }
+
+    protected String goToClosestArcherFactory(List<Structure> archerFactories){
+        Site targetSite = query.getClosestFromListToUnit( archerFactories, Predicates.factoryTypeArcher, Predicates.friendlyStructure,Predicates.queenUnitType, Predicates.friendlyUnit );
+        return "MOVE " + targetSite.x + " " + targetSite.y;
+    }
 }
 
 class TrainingDecisionMaker implements DecisionMaker {
@@ -256,26 +265,16 @@ class TrainingDecisionMaker implements DecisionMaker {
 
         int result = 0;
 
-        int K = query.getAllUnitsOfType(this.units, Predicates.knightUnitType, Predicates.friendlyUnit).size();
-        int A = query.getAllUnitsOfType(this.units, Predicates.archerUnitType, Predicates.friendlyUnit).size();
-        int G = query.getAllUnitsOfType(this.units, Predicates.giantUnitType, Predicates.friendlyUnit).size();
-        int eT = query.getAllStructuresOfType(Predicates.towerStructure, Predicates.enemyStructure).size();
+        Stats stats = query.getStats();
 
-        Logger.log("Current Count: Knights: " + K + ", Archers: " + A + ", Giants: " + G);
+        Logger.log("Current Count: Knights: " + stats.knights + ", Archers: " + stats.archers + ", Giants: " + stats.giants);
 
-        int normalizedKnights = K / 4;
-        int normalizedArchers = A / 2;
-        int normalizedGiants = G;
-        int normalizedETowers = eT;
-
-        if(areEqual(normalizedArchers,normalizedKnights) && areEqual(normalizedKnights, normalizedGiants)){
-            result = Constants.KNIGHT;
+        if ( stats.eKnights > stats.archers ) {
+            result = Constants.ARCHER;
+        } else if( stats.eTowers > 0 && stats.giants <= 2 ) {
+            result = Constants.GIANT;
         } else {
-            if(areEqual(normalizedArchers, normalizedKnights) && normalizedETowers > 0){
-                result = Constants.GIANT;
-            } else {
-                result = normalizedArchers > normalizedKnights ? Constants.KNIGHT : Constants.ARCHER;
-            }
+            result = Constants.KNIGHT;
         }
 
         Logger.log("Training target: " + query.unitTypeOf(result));
@@ -433,6 +432,15 @@ class Predicates {
 
 }
 
+class Stats {
+
+    int knights;
+    int archers;
+    int giants;
+    int eTowers;
+    int eKnights;
+}
+
 class Query {
 
     private final List<Structure> structures;
@@ -552,5 +560,17 @@ class Query {
     public boolean isLessOrEqual(int val1, int... vals ){
         return Arrays.stream(vals)
                 .allMatch(val -> val1 <= val);
+    }
+
+    protected Stats getStats(){
+
+        Stats stats = new Stats();
+
+        stats.knights = this.getAllUnitsOfType(this.units, Predicates.knightUnitType, Predicates.friendlyUnit).size();
+        stats.archers = this.getAllUnitsOfType(this.units, Predicates.archerUnitType, Predicates.friendlyUnit).size();
+        stats.giants = this.getAllUnitsOfType(this.units, Predicates.giantUnitType, Predicates.friendlyUnit).size();
+        stats.eTowers = this.getAllStructuresOfType(Predicates.towerStructure, Predicates.enemyStructure).size();
+        stats.eKnights = this.getAllUnitsOfType(this.units, Predicates.knightUnitType, Predicates.enemyUnit).size();
+        return stats;
     }
 }
