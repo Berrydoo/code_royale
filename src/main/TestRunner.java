@@ -121,22 +121,26 @@ class QueryTests {
 
 class QueenDecisionTests {
 
-    private final QueenDecisionMaker target;
+    private QueenDecisionMaker target;
+    private final TestUtils utils;
 
-    public QueenDecisionTests( QueenDecisionMaker target){
+    public QueenDecisionTests( QueenDecisionMaker target, TestUtils utils){
         this.target = target;
+        this.utils = utils;
     }
 
     public static void main(String[] strings){
         TestUtils utils = new TestUtils();
         QueenDecisionMaker target = new QueenDecisionMaker(utils.gold, utils.touchedSite, utils.sites, utils.getAllStructures(), utils.getAllUnits());
-        QueenDecisionTests tests = new QueenDecisionTests(target);
+        QueenDecisionTests tests = new QueenDecisionTests(target, utils);
 
         tests.isInstanceOf();
         tests.canBuildStructure();
         tests.getNextStructureType_archer();
         tests.getNextStructureType_knight();
         tests.getNextStructureType_tower();
+        tests.getNextStructureType_giant();
+        tests.getNextStructureType_mine();
         tests.move_healthy();
     }
 
@@ -152,18 +156,33 @@ class QueenDecisionTests {
     }
 
     public void getNextStructureType_archer(){
+        target = new QueenDecisionMaker(utils.gold, utils.touchedSite, utils.sites, new ArrayList<>(), utils.getAllUnits());
         assertEquals("BARRACKS-ARCHER", target.getNextStructureType());
         logPassed("getNextStructureType_archer");
     }
 
     public void getNextStructureType_knight(){
+        target = new QueenDecisionMaker(utils.gold, utils.touchedSite, utils.sites, utils.getStructureForKnights(), utils.getAllUnits());
         assertEquals("BARRACKS-KNIGHT", target.getNextStructureType());
         logPassed("getNextStructureType_knight");
     }
 
     public void getNextStructureType_tower(){
+        target = new QueenDecisionMaker(utils.gold, utils.touchedSite, utils.sites, utils.getStructuresForTower(), utils.getAllUnits());
         assertEquals("TOWER", target.getNextStructureType());
         logPassed("getNextStructureType_tower");
+    }
+
+    public void getNextStructureType_giant(){
+        target = new QueenDecisionMaker(utils.gold, utils.touchedSite, utils.sites, utils.getStructuresForGiant(), utils.getAllUnits());
+        assertEquals("BARRACKS-GIANT", target.getNextStructureType());
+        logPassed("getNextStructureType_giant");
+    }
+
+    public void getNextStructureType_mine(){
+        target = new QueenDecisionMaker(utils.gold, utils.touchedSite, utils.sites, utils.getStructureForMines(), utils.getAllUnits());
+        assertEquals("MINE", target.getNextStructureType());
+        logPassed("getNextStructureType_mine");
     }
 
     public void move_healthy(){
@@ -173,7 +192,7 @@ class QueenDecisionTests {
 
 class TrainingDecisionTests {
 
-    private final TrainingDecisionMaker target;
+    private TrainingDecisionMaker target;
     private TestUtils utils;
 
     public TrainingDecisionTests( TrainingDecisionMaker target, TestUtils utils){
@@ -200,28 +219,25 @@ class TrainingDecisionTests {
     }
 
     public void getWhichTypeToBuild_no_units(){
-        target.units.clear();
+        target =  new TrainingDecisionMaker(utils.gold, utils.touchedSite, utils.sites, utils.getAllStructures(), new ArrayList<>());
         assertEquals(Constants.KNIGHT, target.getWhichTypeToBuild());
         logPassed("getWhichTypeToBuild_no_units");
     }
 
     public void getWhichTypeToBuild_knights(){
-        target.units.clear();
-        target.units = utils.getMostlyArchers();
+        target =  new TrainingDecisionMaker(utils.gold, utils.touchedSite, utils.sites, utils.getAllStructures(), utils.getMostlyArchers());
         assertEquals(Constants.KNIGHT, target.getWhichTypeToBuild());
         logPassed("getWhichTypeToBuild_knights");
     }
 
     public void getWhichTypeToBuild_archers(){
-        target.units.clear();
-        target.units = utils.getMostlyKnights();
+        target =  new TrainingDecisionMaker(utils.gold, utils.touchedSite, utils.sites, utils.getAllStructures(), utils.getMostlyKnights());
         assertEquals(Constants.ARCHER, target.getWhichTypeToBuild());
         logPassed("getWhichTypeToBuild_archers");
     }
 
     public void getWhichTypeToBuild_giants(){
-        target.units.clear();
-        target.units = utils.getNoGiants();
+        target =  new TrainingDecisionMaker(utils.gold, utils.touchedSite, utils.sites, utils.getAllStructures(), utils.getNoGiants());
         assertEquals(Constants.GIANT, target.getWhichTypeToBuild());
         logPassed("getWhichTypeToBuild_giants");
     }
@@ -257,8 +273,7 @@ class TrainingDecisionTests {
 
     public void capableOfTraining_no_factory_available(){
         target.gold = 100;
-        target.structures.clear();
-        target.structures = utils.getGiantFactoryOnly();
+        target =  new TrainingDecisionMaker(utils.gold, utils.touchedSite, utils.sites, utils.getGiantFactoryOnly(), utils.getAllUnits());
         assertFalse(target.capableOfTraining(1, Constants.KNIGHT));
         logPassed("capableOfTraining_no_factory_available");
     }
@@ -278,7 +293,11 @@ class TestUtils {
     Structure structure3 = new Structure(3,0,0,Constants.BARRACKS, Constants.FRIENDLY_OWNER, 0, 0); // knight
     Structure structure4 = new Structure(4,0,0,Constants.BARRACKS, Constants.FRIENDLY_OWNER, 0, 1); // archer
     Structure structure5 = new Structure(5,0,0,Constants.BARRACKS, Constants.FRIENDLY_OWNER, 0, 2); // giant
-    Structure structure6 = new Structure(6,0,0,Constants.BARRACKS, Constants.ENEMY_OWNER, 0, 0); // enemy knight
+    Structure structure6 = new Structure(6,0,0,Constants.BARRACKS, Constants.ENEMY_OWNER, 0, 0); // ememy knight
+    Structure structure7 = new Structure(7,0,0,Constants.MINE, Constants.FRIENDLY_OWNER, 0, 0); // mine
+    Structure structure8 = new Structure(8,0,0,Constants.MINE, Constants.ENEMY_OWNER, 0, 0); // enemy knight
+    Structure structure9 = new Structure(9,0,0,Constants.MINE, Constants.ENEMY_OWNER, 0, 0); // enemy knight
+    Structure structure10 = new Structure(10,0,0,Constants.TOWER, Constants.FRIENDLY_OWNER, 0, 0); // friendly mine
 
     //List<Structure> structures = Arrays.asList(structure1, structure2, structure3, structure4);
 
@@ -387,5 +406,39 @@ class TestUtils {
         return giantFactory;
     }
 
+    public List<Structure> getStructureForMines(){
+        List<Structure> structures = new ArrayList<>();
+        structures.add(structure7);
+        structures.add(structure8);
+        structures.add(structure9);
+        return structures;
+    }
+
+    public List<Structure> getStructureForKnights(){
+        List<Structure> structures = new ArrayList<>();
+        structures.add(structure4);
+        structures.add(structure5);
+        structures.add(structure7);
+        structures.add(structure10);
+        return structures;
+    }
+
+    public List<Structure> getStructuresForTower(){
+        List<Structure> structures = new ArrayList<>();
+        structures.add(structure4);
+        structures.add(structure5);
+        structures.add(structure7);
+        structures.add(structure3);
+        return structures;
+    }
+
+    public List<Structure> getStructuresForGiant(){
+        List<Structure> structures = new ArrayList<>();
+        structures.add(structure2);
+        structures.add(structure4);
+        structures.add(structure7);
+        structures.add(structure10);
+        return structures;
+    }
 }
 
