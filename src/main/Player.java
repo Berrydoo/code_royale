@@ -162,7 +162,7 @@ class QueenDecisionMaker implements DecisionMaker {
 
     protected void buildNextStructure(){
 
-        long numFactories = query.structures.stream()
+        long numKnightFactories = query.structures.stream()
                 .filter( s -> s.structureType != Constants.MINE && s.structureType != Constants.TOWER)
                 .filter( s -> s.owner == Constants.FRIENDLY_OWNER)
                 .count();
@@ -172,12 +172,12 @@ class QueenDecisionMaker implements DecisionMaker {
                 .filter( s -> s.owner == Constants.FRIENDLY_OWNER)
                 .count();
 
-        if( numFactories == 0){
+        if( numKnightFactories == 0){
             Structure targetSite = query.getClosestSiteToUnit(Predicates.emptyOrMineOrBarracks, Predicates.enemyOrNoOwner, Predicates.friendlyUnit, Predicates.queenUnitType);
-            System.out.println("BUILD " + targetSite.siteId + " BARRACKS-ARCHER");
-        } else if( numTowers == 0 ){
-            Structure targetSite = query.getClosestSiteToUnit(Predicates.emptyOrMineOrBarracks, Predicates.enemyOrNoOwner, Predicates.friendlyUnit, Predicates.queenUnitType);
-            System.out.println("BUILD " + targetSite.siteId + " TOWER");
+            System.out.println("BUILD " + targetSite.siteId + " BARRACKS-KNIGHT");
+//        } else if( numTowers == 0 ){
+//            Structure targetSite = query.getClosestSiteToUnit(Predicates.emptyOrMineOrBarracks, Predicates.enemyOrNoOwner, Predicates.friendlyUnit, Predicates.queenUnitType);
+//            System.out.println("BUILD " + targetSite.siteId + " TOWER");
         } else {
             if( getIncomeFromMines() < 8 ){
                 buildMine();
@@ -204,12 +204,32 @@ class QueenDecisionMaker implements DecisionMaker {
 
             Structure alternate = query.structures.stream()
                     .filter( s -> s.structureType != Constants.TOWER )
-                    .filter( s -> s.owner == Constants.ENEMY_OWNER || s.owner == Constants.NO_OWNER )
+                    .filter( s -> s.owner != Constants.FRIENDLY_OWNER )
+                    .filter( s -> s.goldInMine > 0 )
+                    .peek( s -> System.err.println("Structure2 " + s.siteId + ", max mine: " + s.maxMineSize + ", goldRemaining: " + s.goldInMine) )
                     .min(Comparator.comparingDouble(s ->  getDistanceFromUnitToSite(s.siteId, query.findUnitByTypeAndOwner(Predicates.queenUnitType, Predicates.friendlyUnit))))
                     .orElse(null);
 
             if( Objects.isNull(alternate)) {
-                System.out.println("MOVE 0 0");
+                Structure alternate2 = query.structures.stream()
+                        .filter( s -> s.structureType != Constants.TOWER )
+                        .filter( s -> s.owner != Constants.FRIENDLY_OWNER )
+                        .peek( s -> System.err.println("Structure3 " + s.siteId + ", max mine: " + s.maxMineSize + ", goldRemaining: " + s.goldInMine) )
+                        .min(Comparator.comparingDouble(s ->  getDistanceFromUnitToSite(s.siteId, query.findUnitByTypeAndOwner(Predicates.queenUnitType, Predicates.friendlyUnit))))
+                        .orElse(null);
+                if( Objects.nonNull(alternate2) ){
+                    System.out.println("BUILD " + alternate2.siteId + " " + getNextStructureType());
+                } else {
+                    Structure alternate3 = query.structures.stream()
+                            .filter( s -> s.structureType == Constants.TOWER )
+                            .filter( s -> s.owner == Constants.FRIENDLY_OWNER )
+                            .peek( s -> System.err.println("Structure4 " + s.siteId + ", max mine: " + s.maxMineSize + ", goldRemaining: " + s.goldInMine) )
+                            .min(Comparator.comparingDouble(s ->  getDistanceFromUnitToSite(s.siteId, query.findUnitByTypeAndOwner(Predicates.queenUnitType, Predicates.friendlyUnit))))
+                            .orElse(null);
+
+                    Site site = query.getSiteById(alternate3.siteId);
+                    System.out.println("MOVE " + site.x + " " + site.y );
+                }
             } else {
                 System.out.println("BUILD " + alternate.siteId + " MINE");
             }
@@ -437,6 +457,8 @@ class Structure {
     int siteId;
     int structureType;
     int owner;
+    int goldInMine;
+    int maxMineSize;
 
     public static Structure createStructure(int siteId, int goldInMine, int maxMineSize, int structureType, int owner, int param1, int param2){
         switch (structureType) {
@@ -464,6 +486,8 @@ class Structure {
         this.siteId = siteId;
         this.structureType = structureType;
         this.owner = owner;
+        this.goldInMine = goldInMine;
+        this.maxMineSize = maxMineSize;
     }
 }
 
@@ -509,8 +533,6 @@ class Tower extends Structure {
 
 class Mine extends Structure {
 
-    int goldInMine;
-    int maxMineSize;
     int incomeRate;
 
     boolean rateIsMaxed(){
@@ -519,8 +541,6 @@ class Mine extends Structure {
 
     public Mine(int siteId, int goldInMine, int maxMineSize, int structureType, int owner, int param1, int param2) {
         super(siteId, goldInMine, maxMineSize, structureType, owner, param1, param2);
-        this.goldInMine = goldInMine;
-        this.maxMineSize = maxMineSize;
         this.incomeRate = param1;
     }
 }
