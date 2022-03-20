@@ -119,7 +119,7 @@ class QueenDecisionMaker implements DecisionMaker {
         }
     }
 
-    protected String getNextStructureType(Structure targetSite){
+    protected String getNextStructureType(){
 
         int archers = query.getAllStructuresOfType(Predicates.factoryTypeArcher, Predicates.friendlyStructure).size();
         int knights = query.getAllStructuresOfType(Predicates.factoryTypeKnight, Predicates.friendlyStructure).size();
@@ -128,9 +128,6 @@ class QueenDecisionMaker implements DecisionMaker {
         int mines = query.getAllStructuresOfType(Predicates.mineStructure, Predicates.friendlyStructure).size();
         int eMines = query.getAllStructuresOfType(Predicates.mineStructure, Predicates.enemyStructure).size();
 
-        if( mines == 0){
-            return "MINE";
-        }
         if( archers == 0){
             return "BARRACKS-ARCHER";
         }
@@ -144,12 +141,10 @@ class QueenDecisionMaker implements DecisionMaker {
             return "BARRACKS-GIANT";
         }
 
-        if( mines < eMines || mines < 4 ){
-            return "MINE";
+        if( query.isLessOrEqual(knights, archers, giants, towers, mines)) {
+            return "BARRACKS-KNIGHT";
         } else if( query.isLessOrEqual(archers, knights, giants, towers, mines)) {
             return "BARRACKS-ARCHER";
-        } else if( query.isLessOrEqual(knights, archers, giants, towers, mines)) {
-            return "BARRACKS-KNIGHT";
         } else if( query.isLessOrEqual(giants, knights, archers, towers, mines)) {
             return "BARRACKS-GIANT";
         } else if( query.isLessOrEqual(towers, knights, archers, giants, mines)) {
@@ -166,10 +161,81 @@ class QueenDecisionMaker implements DecisionMaker {
     }
 
     protected void buildNextStructure(){
-        Structure targetSite = query.getClosestSiteToUnit(Predicates.emptyOrMineOrBarracks, Predicates.enemyOrNoOwner, Predicates.friendlyUnit, Predicates.queenUnitType);
-        System.out.println("BUILD " + targetSite.siteId + " " + getNextStructureType(targetSite));
+
+        long numFactories = query.structures.stream()
+                .filter( s -> s.structureType != Constants.MINE && s.structureType != Constants.TOWER)
+                .filter( s -> s.owner == Constants.FRIENDLY_OWNER)
+                .count();
+
+        long numTowers = query.structures.stream()
+                .filter( s -> s.structureType == Constants.TOWER )
+                .filter( s -> s.owner == Constants.FRIENDLY_OWNER)
+                .count();
+
+        if( numFactories == 0){
+            Structure targetSite = query.getClosestSiteToUnit(Predicates.emptyOrMineOrBarracks, Predicates.enemyOrNoOwner, Predicates.friendlyUnit, Predicates.queenUnitType);
+            System.out.println("BUILD " + targetSite.siteId + " BARRACKS-ARCHER");
+        } else if( numTowers == 0 ){
+            Structure targetSite = query.getClosestSiteToUnit(Predicates.emptyOrMineOrBarracks, Predicates.enemyOrNoOwner, Predicates.friendlyUnit, Predicates.queenUnitType);
+            System.out.println("BUILD " + targetSite.siteId + " TOWER");
+        } else {
+            if( getIncomeFromMines() < 8 ){
+                buildMine();
+            } else {
+                Structure targetSite = query.getClosestSiteToUnit(Predicates.emptyOrMineOrBarracks, Predicates.enemyOrNoOwner, Predicates.friendlyUnit, Predicates.queenUnitType);
+                System.out.println("BUILD " + targetSite.siteId + " " + getNextStructureType());
+            }
+        }
     }
 
+    private void buildMine(){
+
+        Mine closestMine = query.structures.stream()
+                .filter( s -> s.structureType == Constants.MINE )
+                .filter( s -> s.owner == Constants.FRIENDLY_OWNER )
+                .map( s -> (Mine)s)
+                .peek( s -> System.err.println("Mine " + s.siteId + ", Income: " + s.incomeRate + ", max: " + s.maxMineSize + ", goldRemaining: " + s.goldInMine) )
+                .filter( s -> !s.rateIsMaxed() && s.goldInMine > 0)
+                .min(Comparator.comparingDouble(s ->  getDistanceFromUnitToSite(s.siteId, query.findUnitByTypeAndOwner(Predicates.queenUnitType, Predicates.friendlyUnit))))
+                .orElse(null);
+
+        if( Objects.isNull(closestMine)){
+            Logger.log("No mines that are not maxed out");
+
+            Structure alternate = query.structures.stream()
+                    .filter( s -> s.structureType != Constants.TOWER )
+                    .filter( s -> s.owner == Constants.ENEMY_OWNER || s.owner == Constants.NO_OWNER )
+                    .min(Comparator.comparingDouble(s ->  getDistanceFromUnitToSite(s.siteId, query.findUnitByTypeAndOwner(Predicates.queenUnitType, Predicates.friendlyUnit))))
+                    .orElse(null);
+
+            if( Objects.isNull(alternate)) {
+                System.out.println("MOVE 0 0");
+            } else {
+                System.out.println("BUILD " + alternate.siteId + " MINE");
+            }
+        } else {
+            Logger.log("Closest mine is site " + closestMine.siteId + ", isMaxed: " + closestMine.rateIsMaxed() + ", output: " + closestMine.incomeRate + ", Max: " + closestMine.maxMineSize);
+            System.out.println("BUILD " + closestMine.siteId + " MINE");
+        }
+    }
+
+    private double getDistanceFromUnitToSite(int siteId, Queen queen ){
+
+        Site site = query.getSiteById(siteId);
+
+        int yDiff = Math.max(queen.y, site.y) - Math.min(queen.y, site.y);
+        int xDiff = Math.max(queen.x, site.x) - Math.min(queen.x, site.x);
+
+        return Math.sqrt( (yDiff*yDiff) + (xDiff*xDiff) );
+
+    }
+
+    protected int getIncomeFromMines(){
+        List<Mine> mines = query.getAllStructuresOfType(Predicates.mineStructure, Predicates.friendlyStructure);
+        int mineIncome =  mines.stream().reduce(0, (subtotal, mine) -> subtotal + mine.incomeRate, Integer::sum);
+        Logger.log("Mine Income: " + mineIncome);
+        return mineIncome;
+    }
 }
 
 class TrainingDecisionMaker implements DecisionMaker {
@@ -446,16 +512,16 @@ class Mine extends Structure {
     int goldInMine;
     int maxMineSize;
     int incomeRate;
-    int maxIncomeRate;
 
     boolean rateIsMaxed(){
-        return incomeRate == maxIncomeRate;
+        return incomeRate == maxMineSize;
     }
 
     public Mine(int siteId, int goldInMine, int maxMineSize, int structureType, int owner, int param1, int param2) {
         super(siteId, goldInMine, maxMineSize, structureType, owner, param1, param2);
         this.goldInMine = goldInMine;
         this.maxMineSize = maxMineSize;
+        this.incomeRate = param1;
     }
 }
 
@@ -499,7 +565,7 @@ class Stats {
 
 class Query {
 
-    private final List<Structure> structures;
+    final List<Structure> structures;
     private final List<Unit> units;
     private final List<Site> sites;
 
