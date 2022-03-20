@@ -171,7 +171,7 @@ class QueenDecisionMaker implements DecisionMaker {
             Structure targetSite = query.getClosestSiteToUnit(Predicates.emptyOrMineOrBarracks, Predicates.enemyOrNoOwner, Predicates.friendlyUnit, Predicates.queenUnitType);
             System.out.println("BUILD " + targetSite.siteId + " BARRACKS-ARCHER");
         } else {
-            if( getIncomeFromMines() < 8 ){
+            if( getIncomeFromMines() < 15 ){
                 buildMine();
             } else {
                 Structure targetSite = query.getClosestSiteToUnit(Predicates.emptyOrMineOrBarracks, Predicates.enemyOrNoOwner, Predicates.friendlyUnit, Predicates.queenUnitType);
