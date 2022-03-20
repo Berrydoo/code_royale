@@ -167,17 +167,9 @@ class QueenDecisionMaker implements DecisionMaker {
                 .filter( s -> s.owner == Constants.FRIENDLY_OWNER)
                 .count();
 
-        long numTowers = query.structures.stream()
-                .filter( s -> s.structureType == Constants.TOWER )
-                .filter( s -> s.owner == Constants.FRIENDLY_OWNER)
-                .count();
-
-        if( numKnightFactories == 0){
+        if( numKnightFactories == 0) {
             Structure targetSite = query.getClosestSiteToUnit(Predicates.emptyOrMineOrBarracks, Predicates.enemyOrNoOwner, Predicates.friendlyUnit, Predicates.queenUnitType);
-            System.out.println("BUILD " + targetSite.siteId + " BARRACKS-KNIGHT");
-//        } else if( numTowers == 0 ){
-//            Structure targetSite = query.getClosestSiteToUnit(Predicates.emptyOrMineOrBarracks, Predicates.enemyOrNoOwner, Predicates.friendlyUnit, Predicates.queenUnitType);
-//            System.out.println("BUILD " + targetSite.siteId + " TOWER");
+            System.out.println("BUILD " + targetSite.siteId + " BARRACKS-ARCHER");
         } else {
             if( getIncomeFromMines() < 8 ){
                 buildMine();
