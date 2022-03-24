@@ -50,63 +50,45 @@ class Player {
                 units.add(Unit.createUnit(x, y, owner, unitType, health));
             }
 
-            Manager manager = new Manager(gold, touchedSite, sites, structures, units);
-            manager.manage();
+            new Commander(gold, touchedSite, sites, structures, units);
 
         }
     }
 }
 
-class Manager {
-
-    int gold;
-    int touchedSite;
-    List<Site> sites;
-    List<Structure> structures;
-    List<Unit> units;
-
-    public Manager( int gold, int touchedSite, List<Site> sites, List<Structure> structures, List<Unit> units ){
-        this.gold = gold;
-        this.touchedSite = touchedSite;
-        this.sites = sites;
-        this.structures = structures;
-        this.units = units;
-    }
-
-    public void manage(){
-        makeQueenDecision();
-        makeTrainingDecision();
-    }
-
-    public void makeQueenDecision(){
-        QueenDecisionMaker qdm = new QueenDecisionMaker(this.gold, this.touchedSite, this.sites, this.structures, this.units );
-        qdm.decide();
-    }
-
-    public void makeTrainingDecision(){
-
-        TrainingDecisionMaker tdm = new TrainingDecisionMaker(this.gold, this.touchedSite, this.sites, this.structures, this.units );
-        tdm.decide();
-
-    }
-
-}
-
-interface DecisionMaker {
-
-    void decide();
-}
-
-class QueenDecisionMaker implements DecisionMaker {
-
-    protected int touchedSite;
+class Grunt {
 
     Query query;
 
-    public QueenDecisionMaker( int gold, int touchedSite, List<Site> sites, List<Structure> structures, List<Unit> units ){
-        this.touchedSite = touchedSite;
-        this.query = new Query(structures, units, sites);
+    public Grunt(Query query){
+        this.query = query;
     }
+
+    public void executeStrategy(QueenStrategy queenStrategy, TrainingStrategy trainingStrategy){
+        getQueenCommand(queenStrategy).executeCommand();
+        getTrainCommand(trainingStrategy).executeCommand();
+    }
+
+    private CommandInterface getQueenCommand(QueenStrategy queenStrategy){
+        switch (queenStrategy){
+            case BuildArcherFactory: {
+                return new BuildArcherFactoryCommand(query);
+            }
+            default:
+                return new BuildArcherFactoryCommand(query);
+        }
+    }
+
+    private CommandInterface getTrainCommand(TrainingStrategy trainingStrategy){
+        switch (trainingStrategy){
+            case TrainArcher: {
+                return new TrainArcherCommand(query);
+            }
+            default:
+                return new TrainArcherCommand(query);
+        }
+    }
+
 
     public void decide(){
 
@@ -126,7 +108,6 @@ class QueenDecisionMaker implements DecisionMaker {
         int giants = query.getAllStructuresOfType(Predicates.factoryTypeGiant, Predicates.friendlyStructure).size();
         int towers = query.getAllStructuresOfType(Predicates.towerStructure, Predicates.friendlyStructure).size();
         int mines = query.getAllStructuresOfType(Predicates.mineStructure, Predicates.friendlyStructure).size();
-        int eMines = query.getAllStructuresOfType(Predicates.mineStructure, Predicates.enemyStructure).size();
 
         if( archers == 0){
             return "BARRACKS-ARCHER";
@@ -250,16 +231,16 @@ class QueenDecisionMaker implements DecisionMaker {
     }
 }
 
-class TrainingDecisionMaker implements DecisionMaker {
+class TrainingDecisionMaker {
 
-    int gold;
-    int touchedSite;
     Query query;
 
-    public TrainingDecisionMaker(int gold, int touchedSite, List<Site> sites, List<Structure> structures, List<Unit> units ){
-        this.gold = gold;
-        this.touchedSite = touchedSite;
-        this.query = new Query(structures, units, sites);
+    public TrainingDecisionMaker(Query query){
+        this.query = query;
+    }
+
+    public void executeCommand(QueenStrategy queenStrategy){
+        decide();
     }
 
     public void decide(){
@@ -309,7 +290,7 @@ class TrainingDecisionMaker implements DecisionMaker {
 
     protected boolean capableOfTraining(int friendsCount, int targetUnitType){
         return friendsCount > 0
-                && this.gold >= ( targetUnitType == Constants.ARCHER ? Constants.ARCHER_COST : targetUnitType == Constants.GIANT ? Constants.GIANT_COST : Constants.KNIGHT_COST )
+                && this.query.gold >= ( targetUnitType == Constants.ARCHER ? Constants.ARCHER_COST : targetUnitType == Constants.GIANT ? Constants.GIANT_COST : Constants.KNIGHT_COST )
                 && factoryAvailable(targetUnitType);
     }
 
@@ -571,17 +552,39 @@ class Stats {
     int knights;
     int archers;
     int giants;
-    int eTowers;
+    int knightBarracks;
+    int archerBarracks;
+    int giantBarracks;
+    int towers;
+    int mines;
+    int income;
+    int gold;
     int eKnights;
+    int eArchers;
+    int eGiants;
+    int eKnightBarracks;
+    int eArcherBarracks;
+    int eGiantBarracks;
+    int eTowers;
+    int eMines;
+    int eIncome;
+
+    int totalBarracks = knightBarracks + archerBarracks + giantBarracks;
+    int eTotalBarracks = eKnightBarracks + eArcherBarracks + eGiantBarracks;
 }
 
 class Query {
 
-    final List<Structure> structures;
-    private final List<Unit> units;
-    private final List<Site> sites;
 
-    public Query(List<Structure> structures, List<Unit> units, List<Site> sites){
+    final int gold;
+    final int touchedSite;
+    final List<Structure> structures;
+    final List<Unit> units;
+    final List<Site> sites;
+
+    public Query(int gold, int touchedSite, List<Site> sites, List<Structure> structures, List<Unit> units){
+        this.gold = gold;
+        this.touchedSite = touchedSite;
         this.structures = structures;
         this.units = units;
         this.sites = sites;
@@ -605,8 +608,6 @@ class Query {
 
     public double getDistanceFromUnitToSite(int siteId, Predicate<? super Unit> unitType, Predicate<? super Unit> unitOwner ){
 
-        // log("getDistanceFromQueen " + structure);
-
         Unit unit = findUnitByTypeAndOwner(unitType, unitOwner );
         Site site = getSiteById(siteId);
 
@@ -629,7 +630,6 @@ class Query {
 
     public <T> T getSiteById( int siteId){
 
-        // log("getSiteById " + siteId);
         return this.sites.stream()
                 .filter( s -> s.siteId == siteId)
                 .map( s -> (T)s)
@@ -639,7 +639,6 @@ class Query {
 
     public <T> T getStructureBySiteId(int siteId ){
 
-        // log("getStructureBySiteId " + siteId);
         return this.structures.stream()
                 .filter( s -> s.siteId == siteId)
                 .map( s -> (T)s)
@@ -688,6 +687,13 @@ class Query {
                 .allMatch(val -> val1 <= val);
     }
 
+    protected int getIncomeFromMines(List<Mine> mines){
+//        List<Mine> mines = query.getAllStructuresOfType(Predicates.mineStructure, Predicates.friendlyStructure);
+        int mineIncome =  mines.stream().reduce(0, (subtotal, mine) -> subtotal + mine.incomeRate, Integer::sum);
+        Logger.log("Mine Income: " + mineIncome);
+        return mineIncome;
+    }
+
     protected Stats getStats(){
 
         Stats stats = new Stats();
@@ -695,9 +701,158 @@ class Query {
         stats.knights = this.getAllUnitsOfType(this.units, Predicates.knightUnitType, Predicates.friendlyUnit).size();
         stats.archers = this.getAllUnitsOfType(this.units, Predicates.archerUnitType, Predicates.friendlyUnit).size();
         stats.giants = this.getAllUnitsOfType(this.units, Predicates.giantUnitType, Predicates.friendlyUnit).size();
-        stats.eTowers = this.getAllStructuresOfType(Predicates.towerStructure, Predicates.enemyStructure).size();
+        stats.knightBarracks = this.getAllStructuresOfType(Predicates.factoryTypeKnight, Predicates.friendlyStructure).size();
+        stats.archerBarracks = this.getAllStructuresOfType(Predicates.factoryTypeArcher, Predicates.friendlyStructure).size();
+        stats.giantBarracks = this.getAllStructuresOfType(Predicates.factoryTypeGiant, Predicates.friendlyStructure).size();
+        stats.towers = this.getAllStructuresOfType(Predicates.towerStructure, Predicates.friendlyStructure).size();
+        stats.mines = this.getAllStructuresOfType(Predicates.mineStructure, Predicates.friendlyStructure).size();
+        stats.income = getIncomeFromMines(this.getAllStructuresOfType(Predicates.mineStructure, Predicates.friendlyStructure));
+        stats.gold = this.gold;
         stats.eKnights = this.getAllUnitsOfType(this.units, Predicates.knightUnitType, Predicates.enemyUnit).size();
+        stats.eArchers = this.getAllUnitsOfType(this.units, Predicates.archerUnitType, Predicates.enemyUnit).size();
+        stats.eGiants = this.getAllUnitsOfType(this.units, Predicates.giantUnitType, Predicates.enemyUnit).size();
+        stats.eKnightBarracks = this.getAllStructuresOfType(Predicates.factoryTypeKnight, Predicates.friendlyStructure).size();
+        stats.eArcherBarracks = this.getAllStructuresOfType(Predicates.factoryTypeArcher, Predicates.friendlyStructure).size();
+        stats.eGiantBarracks = this.getAllStructuresOfType(Predicates.factoryTypeGiant, Predicates.friendlyStructure).size();
+        stats.eTowers = this.getAllStructuresOfType(Predicates.towerStructure, Predicates.enemyStructure).size();
+        stats.eMines = this.getAllStructuresOfType(Predicates.mineStructure, Predicates.enemyStructure).size();
+        stats.eIncome = getIncomeFromMines(this.getAllStructuresOfType(Predicates.mineStructure, Predicates.enemyStructure));
+
         return stats;
     }
 
+}
+
+class Commander {
+
+    Query query;
+    Grunt grunt;
+    Stats stats;
+
+    public Commander( int gold, int touchedSite, List<Site> sites, List<Structure> structures, List<Unit> units ){
+
+        Query query = new Query(gold, touchedSite, sites, structures, units);
+        this.grunt = new Grunt(query);
+        this.stats = query.getStats();
+        createStrategy();
+
+    }
+
+    void createStrategy(){
+        QueenStrategy queenStrategy = getQueenStrategy();
+        TrainingStrategy trainingStrategy = getTrainingStrategy();
+
+        this.grunt.executeStrategy(queenStrategy, trainingStrategy);
+
+    }
+
+    QueenStrategy getQueenStrategy(){
+
+        return QueenStrategy.BuildArcherFactory;
+
+//        Stats stats = query.getStats();
+//        if( haveNoStructures(stats) ){
+//            return QueenStrategy.CreateArcherFactory;
+//        }
+
+
+    }
+
+    TrainingStrategy getTrainingStrategy(){
+        return TrainingStrategy.TrainArcher;
+    }
+
+    private boolean haveNoStructures(Stats stats){
+        return query.areEqual(0, stats.totalBarracks, stats.towers, stats.mines);
+    }
+
+}
+
+enum QueenStrategy {
+    BuildArcherFactory,
+    BuildKnightFactory,
+    BuildGiantFactory,
+    BuildMine,
+    BuildTower,
+    Retreat
+}
+
+enum TrainingStrategy {
+    TrainArcher,
+    TrainKnight,
+    TrainGiant
+}
+
+interface CommandInterface {
+    void executeCommand();
+    void writeCommandMessage(String message);
+
+}
+
+abstract class AbstractCommand implements CommandInterface {
+
+    private Query query;
+
+    public AbstractCommand( Query query ){ this.query = query;}
+
+    public abstract void executeCommand();
+
+    public void writeCommandMessage(String message) {
+        System.out.println(message);
+    }
+
+    public void writeLogMessage(String message){
+        System.err.println(message);
+    }
+}
+
+class BuildArcherFactoryCommand extends AbstractCommand {
+
+    public BuildArcherFactoryCommand(Query query){
+        super(query);
+    }
+
+    @Override
+    public void executeCommand() {
+
+    }
+
+}
+
+class TrainArcherCommand extends AbstractCommand {
+
+    public TrainArcherCommand(Query query ){
+        super(query);
+    }
+
+    @Override
+    public void executeCommand() {
+
+    }
+
+}
+
+class TrainKnightCommand extends AbstractCommand {
+
+    public TrainKnightCommand(Query query) {
+        super(query);
+    }
+
+    @Override
+    public void executeCommand() {
+
+    }
+}
+
+class TrainGiantCommand extends AbstractCommand {
+
+    public TrainGiantCommand(Query query) {
+        super(query);
+        writeLogMessage("TRAINING GIANT");
+    }
+
+    @Override
+    public void executeCommand() {
+
+    }
 }
