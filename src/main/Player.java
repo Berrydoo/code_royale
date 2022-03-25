@@ -767,7 +767,7 @@ class BuildMineCommand extends AbstractCommand {
             }
         }
 
-        Site closestSite = Stream.of(closestNoStructure, closestArcherBarracks, closestKnightBarracks, closestGiantBarracks, closestEnemyMine, closestEnemyMine)
+        Site closestSite = sites.stream()
                 .filter(Objects::nonNull)
                 .map( s -> getSiteFromStructure(s.siteId, gameData.sites))
                 .min(Comparator.comparingDouble(site -> getDistanceFromUnitToSite(site, gameData.units.friendlyQueen)))
