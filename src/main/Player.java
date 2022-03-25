@@ -27,7 +27,18 @@ class Player {
             int gold = in.nextInt();
             int touchedSite = in.nextInt(); // -1 if none
 
-            List<Structure> structures = new ArrayList<>();
+            List<ArcherBarracks> friendlyArcherBarracks = new ArrayList<>();
+            List<KnightBarracks> friendlyKnightBarracks = new ArrayList<>();
+            List<GiantBarracks> friendlyGiantBarracks = new ArrayList<>();
+            List<Mine> friendlyMines = new ArrayList<>();
+            List<Tower> friendlyTowers = new ArrayList<>();
+            List<ArcherBarracks> enemyArcherBarracks = new ArrayList<>();
+            List<KnightBarracks> enemyKnightBarracks = new ArrayList<>();
+            List<GiantBarracks> enemyGiantBarracks = new ArrayList<>();
+            List<Mine> enemyMines = new ArrayList<>();
+            List<Tower> enemyTowers = new ArrayList<>();
+            List<Structure> noStructures = new ArrayList<>();
+
             for (int i = 0; i < numSites; i++) {
                 int siteId = in.nextInt();
                 int goldInMine = in.nextInt(); // gold in mine
@@ -36,10 +47,60 @@ class Player {
                 int owner = in.nextInt(); // -1 = No structure, 0 = Friendly, 1 = Enemy
                 int param1 = in.nextInt();
                 int param2 = in.nextInt();
-                structures.add( Structure.createStructure(siteId, goldInMine, maxMineSize, structureType, owner, param1, param2));
-            }
 
-            List<Unit> units = new ArrayList<>();
+                if( owner == 0) { // FRIENDLY
+                    switch (structureType) {
+                        case 0: // MINE
+                           friendlyMines.add(new Mine(siteId, goldInMine, maxMineSize, structureType, owner, param1, param2));
+                        case 1: // TOWER
+                            friendlyTowers.add(new Tower(siteId, goldInMine, maxMineSize, structureType, owner, param1, param2));
+                        case 2:
+                            switch (param2) {
+                                case 0: // KNIGHT
+                                    friendlyKnightBarracks.add(new KnightBarracks(siteId, goldInMine, maxMineSize, structureType, owner, param1, param2));
+                                case 1: // ARCHER
+                                    friendlyArcherBarracks.add(new ArcherBarracks(siteId, goldInMine, maxMineSize, structureType, owner, param1, param2));
+                                case 2: // GIANT
+                                    friendlyGiantBarracks.add(new GiantBarracks(siteId, goldInMine, maxMineSize, structureType, owner, param1, param2));
+                            }
+                        default:
+                            throw new RuntimeException("Unknown structure type: " + structureType);
+                    }
+                } else if( owner == 1){
+                    switch (structureType) {
+                        case 0: // MINE
+                             enemyMines.add(new Mine(siteId, goldInMine, maxMineSize, structureType, owner, param1, param2));
+                        case 1: // TOWER
+                             enemyTowers.add(new Tower(siteId, goldInMine, maxMineSize, structureType, owner, param1, param2));
+                        case 2:
+                            switch (param2) {
+                                case 0: // KNIGHT
+                                     enemyKnightBarracks.add(new KnightBarracks(siteId, goldInMine, maxMineSize, structureType, owner, param1, param2));
+                                case 1: // ARCHER
+                                     enemyArcherBarracks.add(new ArcherBarracks(siteId, goldInMine, maxMineSize, structureType, owner, param1, param2));
+                                case 2: // GIANT
+                                     enemyGiantBarracks.add(new GiantBarracks(siteId, goldInMine, maxMineSize, structureType, owner, param1, param2));
+                            }
+                        default:
+                            throw new RuntimeException("Unknown structure type: " + structureType);
+                    }
+                } else {
+                    noStructures.add(new NoStructure(siteId, goldInMine, maxMineSize, structureType, owner, param1, param2));
+                }
+            }
+            Structures structures = new Structures(friendlyArcherBarracks, friendlyKnightBarracks, friendlyGiantBarracks,
+                                            friendlyMines, friendlyTowers, enemyArcherBarracks, enemyKnightBarracks,
+                                            enemyGiantBarracks, enemyMines, enemyTowers, noStructures );
+
+            Queen friendlyQueen = null;
+            List<Knight> friendlyKnights = new ArrayList<>();
+            List<Archer> friendlyArchers = new ArrayList<>();
+            List<Giant> friendlyGiants = new ArrayList<>();
+            Queen enemyQueen = null;
+            List<Knight> enemyKnights = new ArrayList<>();
+            List<Archer> enemyArchers = new ArrayList<>();
+            List<Giant> enemyGiants = new ArrayList<>();
+
             int numUnits = in.nextInt();
             for (int i = 0; i < numUnits; i++) {
                 int x = in.nextInt();
@@ -47,288 +108,138 @@ class Player {
                 int owner = in.nextInt();
                 int unitType = in.nextInt(); // -1 = QUEEN, 0 = KNIGHT, 1 = ARCHER, 2 = GIANT
                 int health = in.nextInt();
-                units.add(Unit.createUnit(x, y, owner, unitType, health));
-            }
 
-            new Commander(gold, touchedSite, sites, structures, units);
-
-        }
-    }
-}
-
-class Grunt {
-
-    Query query;
-
-    public Grunt(Query query){
-        this.query = query;
-    }
-
-    public void executeStrategy(QueenStrategy queenStrategy, TrainingStrategy trainingStrategy){
-        getQueenCommand(queenStrategy).executeCommand();
-        getTrainCommand(trainingStrategy).executeCommand();
-    }
-
-    private CommandInterface getQueenCommand(QueenStrategy queenStrategy){
-        switch (queenStrategy){
-            case BuildArcherFactory: {
-                return new BuildArcherFactoryCommand(query);
-            }
-            default:
-                return new BuildArcherFactoryCommand(query);
-        }
-    }
-
-    private CommandInterface getTrainCommand(TrainingStrategy trainingStrategy){
-        switch (trainingStrategy){
-            case TrainArcher: {
-                return new TrainArcherCommand(query);
-            }
-            default:
-                return new TrainArcherCommand(query);
-        }
-    }
-
-
-    public void decide(){
-
-        List<Structure> allTowers = query.getAllStructuresOfType(Predicates.towerStructure, Predicates.friendlyStructure);
-        Stats stats = query.getStats();
-        if ( (stats.eKnights > stats.archers + 2) && !allTowers.isEmpty() ) {
-            goToClosestTower(allTowers);
-        } else {
-            buildNextStructure();
-        }
-    }
-
-    protected String getNextStructureType(){
-
-        int archers = query.getAllStructuresOfType(Predicates.factoryTypeArcher, Predicates.friendlyStructure).size();
-        int knights = query.getAllStructuresOfType(Predicates.factoryTypeKnight, Predicates.friendlyStructure).size();
-        int giants = query.getAllStructuresOfType(Predicates.factoryTypeGiant, Predicates.friendlyStructure).size();
-        int towers = query.getAllStructuresOfType(Predicates.towerStructure, Predicates.friendlyStructure).size();
-        int mines = query.getAllStructuresOfType(Predicates.mineStructure, Predicates.friendlyStructure).size();
-
-        if( archers == 0){
-            return "BARRACKS-ARCHER";
-        }
-        if( towers == 0){
-            return "TOWER";
-        }
-        if( knights == 0){
-            return "BARRACKS-KNIGHT";
-        }
-        if(giants == 0){
-            return "BARRACKS-GIANT";
-        }
-
-        if( query.isLessOrEqual(knights, archers, giants, towers, mines)) {
-            return "BARRACKS-KNIGHT";
-        } else if( query.isLessOrEqual(archers, knights, giants, towers, mines)) {
-            return "BARRACKS-ARCHER";
-        } else if( query.isLessOrEqual(giants, knights, archers, towers, mines)) {
-            return "BARRACKS-GIANT";
-        } else if( query.isLessOrEqual(towers, knights, archers, giants, mines)) {
-            return "TOWER";
-        } else {
-            return "BARRACKS-KNIGHT";
-        }
-
-    }
-
-    protected void goToClosestTower(List<Structure> allTowers){
-        Tower tower = query.getClosestFromListToUnit(allTowers, Predicates.towerStructure, Predicates.friendlyStructure, Predicates.queenUnitType, Predicates.friendlyUnit);
-        System.out.println("BUILD " + tower.siteId + " TOWER");
-    }
-
-    protected void buildNextStructure(){
-
-        long numKnightFactories = query.structures.stream()
-                .filter( s -> s.structureType != Constants.MINE && s.structureType != Constants.TOWER)
-                .filter( s -> s.owner == Constants.FRIENDLY_OWNER)
-                .count();
-
-        if( numKnightFactories == 0) {
-            Structure targetSite = query.getClosestSiteToUnit(Predicates.emptyOrMineOrBarracks, Predicates.enemyOrNoOwner, Predicates.friendlyUnit, Predicates.queenUnitType);
-            System.out.println("BUILD " + targetSite.siteId + " BARRACKS-ARCHER");
-        } else {
-            if( getIncomeFromMines() < 15 ){
-                buildMine();
-            } else {
-                Structure targetSite = query.getClosestSiteToUnit(Predicates.emptyOrMineOrBarracks, Predicates.enemyOrNoOwner, Predicates.friendlyUnit, Predicates.queenUnitType);
-                System.out.println("BUILD " + targetSite.siteId + " " + getNextStructureType());
-            }
-        }
-    }
-
-    private void buildMine(){
-
-        Mine closestMine = query.structures.stream()
-                .filter( s -> s.structureType == Constants.MINE )
-                .filter( s -> s.owner == Constants.FRIENDLY_OWNER )
-                .map( s -> (Mine)s)
-                .peek( s -> System.err.println("Mine " + s.siteId + ", Income: " + s.incomeRate + ", max: " + s.maxMineSize + ", goldRemaining: " + s.goldInMine) )
-                .filter( s -> !s.rateIsMaxed() && s.goldInMine > 0)
-                .min(Comparator.comparingDouble(s ->  getDistanceFromUnitToSite(s.siteId, query.findUnitByTypeAndOwner(Predicates.queenUnitType, Predicates.friendlyUnit))))
-                .orElse(null);
-
-        if( Objects.isNull(closestMine)){
-            Logger.log("No mines that are not maxed out");
-
-            Structure alternate = query.structures.stream()
-                    .filter( s -> s.structureType != Constants.TOWER )
-                    .filter( s -> s.owner != Constants.FRIENDLY_OWNER )
-                    .filter( s -> s.goldInMine > 0 )
-                    .peek( s -> System.err.println("Structure2 " + s.siteId + ", max mine: " + s.maxMineSize + ", goldRemaining: " + s.goldInMine) )
-                    .min(Comparator.comparingDouble(s ->  getDistanceFromUnitToSite(s.siteId, query.findUnitByTypeAndOwner(Predicates.queenUnitType, Predicates.friendlyUnit))))
-                    .orElse(null);
-
-            if( Objects.isNull(alternate)) {
-                Structure alternate2 = query.structures.stream()
-                        .filter( s -> s.structureType != Constants.TOWER )
-                        .filter( s -> s.owner != Constants.FRIENDLY_OWNER )
-                        .peek( s -> System.err.println("Structure3 " + s.siteId + ", max mine: " + s.maxMineSize + ", goldRemaining: " + s.goldInMine) )
-                        .min(Comparator.comparingDouble(s ->  getDistanceFromUnitToSite(s.siteId, query.findUnitByTypeAndOwner(Predicates.queenUnitType, Predicates.friendlyUnit))))
-                        .orElse(null);
-                if( Objects.nonNull(alternate2) ){
-                    System.out.println("BUILD " + alternate2.siteId + " " + getNextStructureType());
+                if ( owner == 0){
+                    switch (unitType){
+                        case -1: // Queen
+                            friendlyQueen = new Queen(x, y, owner, unitType, health);
+                        case 0: // Knight
+                            friendlyKnights.add(new Knight(x, y, owner, unitType, health));
+                        case 1: // Archer
+                            friendlyArchers.add(new Archer(x, y, owner, unitType, health));
+                        case 2: // Giant
+                            friendlyGiants.add(new Giant(x, y, owner, unitType, health));
+                        default:
+                            throw new RuntimeException("Unknown unit type: " + unitType);
+                    }
                 } else {
-                    Structure alternate3 = query.structures.stream()
-                            .filter( s -> s.structureType == Constants.TOWER )
-                            .filter( s -> s.owner == Constants.FRIENDLY_OWNER )
-                            .peek( s -> System.err.println("Structure4 " + s.siteId + ", max mine: " + s.maxMineSize + ", goldRemaining: " + s.goldInMine) )
-                            .min(Comparator.comparingDouble(s ->  getDistanceFromUnitToSite(s.siteId, query.findUnitByTypeAndOwner(Predicates.queenUnitType, Predicates.friendlyUnit))))
-                            .orElse(null);
-
-                    Site site = query.getSiteById(alternate3.siteId);
-                    System.out.println("MOVE " + site.x + " " + site.y );
+                    switch (unitType){
+                        case -1: // Queen
+                            enemyQueen = new Queen(x, y, owner, unitType, health);
+                        case 0: // Knight
+                            enemyKnights.add(new Knight(x, y, owner, unitType, health));
+                        case 1: // Archer
+                            enemyArchers.add(new Archer(x, y, owner, unitType, health));
+                        case 2: // Giant
+                            enemyGiants.add(new Giant(x, y, owner, unitType, health));
+                        default:
+                            throw new RuntimeException("Unknown unit type: " + unitType);
+                    }
                 }
-            } else {
-                System.out.println("BUILD " + alternate.siteId + " MINE");
             }
-        } else {
-            Logger.log("Closest mine is site " + closestMine.siteId + ", isMaxed: " + closestMine.rateIsMaxed() + ", output: " + closestMine.incomeRate + ", Max: " + closestMine.maxMineSize);
-            System.out.println("BUILD " + closestMine.siteId + " MINE");
+
+            Units units = new Units(friendlyQueen, friendlyKnights, friendlyArchers, friendlyGiants, enemyQueen, enemyKnights, enemyArchers, enemyGiants);
+
+            GameData gameData = new GameData(units, structures, sites);
+
+            new Commander(gold, touchedSite, gameData);
         }
-    }
-
-    private double getDistanceFromUnitToSite(int siteId, Queen queen ){
-
-        Site site = query.getSiteById(siteId);
-
-        int yDiff = Math.max(queen.y, site.y) - Math.min(queen.y, site.y);
-        int xDiff = Math.max(queen.x, site.x) - Math.min(queen.x, site.x);
-
-        return Math.sqrt( (yDiff*yDiff) + (xDiff*xDiff) );
-
-    }
-
-    protected int getIncomeFromMines(){
-        List<Mine> mines = query.getAllStructuresOfType(Predicates.mineStructure, Predicates.friendlyStructure);
-        int mineIncome =  mines.stream().reduce(0, (subtotal, mine) -> subtotal + mine.incomeRate, Integer::sum);
-        Logger.log("Mine Income: " + mineIncome);
-        return mineIncome;
     }
 }
 
-class TrainingDecisionMaker {
+class Commander {
 
-    Query query;
+    GameData gameData;
+    Grunt grunt;
 
-    public TrainingDecisionMaker(Query query){
-        this.query = query;
+    public Commander(int gold, int touchedSite, GameData gameData) {
+        this.gameData = gameData;
+        this.grunt = new Grunt(gameData);
+        createStrategy();
     }
 
-    public void executeCommand(QueenStrategy queenStrategy){
-        decide();
+    void createStrategy() {
+        QueenStrategy queenStrategy = getQueenStrategy();
+        TrainingStrategy trainingStrategy = getTrainingStrategy();
+
+        this.grunt.executeStrategy(queenStrategy, trainingStrategy);
+
     }
 
-    public void decide(){
+    QueenStrategy getQueenStrategy() {
 
-        int targetUnitType = getWhichTypeToBuild();
-        int friendlyStructuresCount = query.getAllStructuresOfType(Predicates.barracksStructure, Predicates.friendlyStructure).size();
-
-        if( capableOfTraining( friendlyStructuresCount, targetUnitType ) ){
-            String siteString;
-            if( targetUnitType == Constants.GIANT){
-                siteString = getGiantFactoryClosestToEnemyQueen();
-            } else if ( targetUnitType == Constants.ARCHER ){
-                siteString = getArcherFactoryClosestToFriendlyQueen();
-            } else {
-                siteString = getKnightFactoryClosestToEnemyQueen();
-            }
-            System.out.println("TRAIN " + siteString);
-        } else {
-            noTraining();
+        // first build a foundation
+        if (haveNoTowers()) {
+            return QueenStrategy.BuildTower;
         }
-    }
-
-    protected int getWhichTypeToBuild(){
-
-        int result = 0;
-
-        Stats stats = query.getStats();
-
-        Logger.log("Current Count: Knights: " + stats.knights + ", Archers: " + stats.archers + ", Giants: " + stats.giants);
-
-        if ( stats.eKnights > stats.archers || stats.archers < 3 ) {
-            result = Constants.ARCHER;
-        } else if( stats.eTowers > 0 && stats.giants <= 1 ) {
-            result = Constants.GIANT;
-        } else {
-            result = Constants.KNIGHT;
+        if (haveNoArcheryBarracks()) {
+            return QueenStrategy.BuildArcherBarracks;
+        }
+        if (haveLimitedIncome(10)) {
+            return QueenStrategy.BuildMine;
         }
 
-        Logger.log("Training target: " + query.unitTypeOf(result));
-        return result;
-    }
-
-    private void noTraining(){
-        Logger.log("cannot train");
-        System.out.println("TRAIN");
-    }
-
-    protected boolean capableOfTraining(int friendsCount, int targetUnitType){
-        return friendsCount > 0
-                && this.query.gold >= ( targetUnitType == Constants.ARCHER ? Constants.ARCHER_COST : targetUnitType == Constants.GIANT ? Constants.GIANT_COST : Constants.KNIGHT_COST )
-                && factoryAvailable(targetUnitType);
-    }
-
-    protected boolean factoryAvailable(int targetUnitType){
-        if( targetUnitType == Constants.ARCHER ){
-            return query.getAllStructuresOfType(Predicates.factoryTypeArcher, Predicates.friendlyStructure).size() > 0;
-        } else if (targetUnitType == Constants.KNIGHT){
-            return query.getAllStructuresOfType(Predicates.factoryTypeKnight, Predicates.friendlyStructure).size() > 0;
-        } else {
-            return query.getAllStructuresOfType(Predicates.factoryTypeGiant, Predicates.friendlyStructure).size() > 0;
+        // foundation is complete
+        if (stressedByAttack()) {
+            return QueenStrategy.Retreat;
         }
+        if (haveNoKnightBarracks()) {
+            return QueenStrategy.BuildKnightBarracks;
+        }
+        if (enemyHasTowers()) {
+            return QueenStrategy.BuildGiantBarracks;
+        }
+        return QueenStrategy.BuildMine;
+
     }
 
-    private String getKnightFactoryClosestToEnemyQueen(){
-        KnightBarracks closestSite = query.getClosestFromListToUnit(query.getAllStructuresOfType(Predicates.factoryTypeKnight, Predicates.friendlyStructure),
-                                                            Predicates.barracksStructure, Predicates.friendlyStructure, Predicates.queenUnitType, Predicates.enemyUnit);
-        return Objects.nonNull(closestSite) ? "" + closestSite.siteId : "";
+    TrainingStrategy getTrainingStrategy() {
+
+        if (haveNoArchers()) {
+            return TrainingStrategy.TrainArcher;
+        }
+        if (haveFewerArchersThanEnemyKnights()) {
+            return TrainingStrategy.TrainArcher;
+        }
+        if (enemyHasTowers()) {
+            return TrainingStrategy.TrainGiant;
+        }
+        return TrainingStrategy.TrainKnight;
+
     }
 
-    private String getArcherFactoryClosestToFriendlyQueen(){
-        ArcherBarracks closestSite = query.getClosestFromListToUnit(query.getAllStructuresOfType(Predicates.factoryTypeArcher, Predicates.friendlyStructure),
-                Predicates.barracksStructure, Predicates.friendlyStructure, Predicates.queenUnitType, Predicates.friendlyUnit);
-        return Objects.nonNull(closestSite) ? "" + closestSite.siteId : "";
+    private boolean haveNoArcheryBarracks() {
+        return gameData.structures.friendlyArcherBarracks.size() == 0;
     }
 
-    private String getGiantFactoryClosestToEnemyQueen(){
-        GiantBarracks closestSite = query.getClosestFromListToUnit(query.getAllStructuresOfType(Predicates.factoryTypeGiant, Predicates.friendlyStructure),
-                Predicates.barracksStructure, Predicates.friendlyStructure, Predicates.queenUnitType, Predicates.enemyUnit);
-        return Objects.nonNull(closestSite) ? "" + closestSite.siteId : "";
+    private boolean haveNoTowers() {
+        return gameData.structures.friendlyTowers.size() == 0;
     }
 
-}
-
-class Logger {
-    public static void log(String msg){
-        System.err.println(msg);
+    private boolean haveLimitedIncome(int incomeThreshold) {
+        int income = gameData.structures.friendlyMines.stream().reduce(0, (subtotal, mine) -> subtotal + mine.incomeRate, Integer::sum);
+        return income < incomeThreshold;
     }
 
+    private boolean stressedByAttack() {
+        return gameData.units.enemyKnights.size() > gameData.units.friendlyArchers.size();
+    }
+
+    private boolean haveNoKnightBarracks() {
+        return gameData.structures.friendlyKnightBarracks.size() == 0;
+    }
+
+    private boolean enemyHasTowers() {
+        return gameData.structures.enemyTowers.size() > 0;
+    }
+
+    private boolean haveNoArchers() {
+        return gameData.units.friendlyArchers.size() == 0;
+    }
+
+    private boolean haveFewerArchersThanEnemyKnights() {
+        return gameData.units.friendlyArchers.size() < gameData.units.enemyKnights.size();
+    }
 }
 
 class Site {
@@ -338,7 +249,7 @@ class Site {
     int y;
     int radius;
 
-    public Site( int siteId, int x, int y, int radius){
+    public Site(int siteId, int x, int y, int radius) {
         this.siteId = siteId;
         this.x = x;
         this.y = y;
@@ -354,22 +265,7 @@ class Unit {
     int unitType;
     int health;
 
-    public static Unit createUnit( int x, int y, int owner, int unitType, int health){
-        switch (unitType){
-            case -1: // Queen
-                return new Queen(x, y, owner, unitType, health);
-            case 0: // Knight
-                return new Knight(x, y, owner, unitType, health);
-            case 1: // Archer
-                return new Archer(x, y, owner, unitType, health);
-            case 2: // Giant
-                return new Giant(x, y, owner, unitType, health);
-            default:
-                throw new RuntimeException("Unknown unit type: " + unitType);
-        }
-    }
-
-    public Unit( int x, int y, int owner, int unitType, int health ){
+    public Unit(int x, int y, int owner, int unitType, int health) {
         this.x = x;
         this.y = y;
         this.owner = owner;
@@ -433,29 +329,7 @@ class Structure {
     int goldInMine;
     int maxMineSize;
 
-    public static Structure createStructure(int siteId, int goldInMine, int maxMineSize, int structureType, int owner, int param1, int param2){
-        switch (structureType) {
-            case -1 : // No Structure
-                return new NoStructure(siteId, goldInMine, maxMineSize, structureType, owner, param1, param2);
-            case 0: // MINE
-                return new Mine(siteId, goldInMine, maxMineSize, structureType, owner, param1, param2);
-            case 1: // TOWER
-                return new Tower(siteId, goldInMine, maxMineSize, structureType, owner, param1, param2);
-            case 2:
-                switch (param2) {
-                    case 0: // KNIGHT
-                        return new KnightBarracks(siteId, goldInMine, maxMineSize, structureType, owner, param1, param2);
-                    case 1: // ARCHER
-                        return new ArcherBarracks(siteId, goldInMine, maxMineSize, structureType, owner, param1, param2);
-                    case 2: // GIANT
-                        return new GiantBarracks(siteId, goldInMine, maxMineSize, structureType, owner, param1, param2);
-                }
-            default:
-                throw new RuntimeException("Unknown structure type: " + structureType);
-        }
-    }
-
-    public Structure(int siteId, int goldInMine, int maxMineSize, int structureType, int owner, int param1, int param2){
+    public Structure(int siteId, int goldInMine, int maxMineSize, int structureType, int owner, int param1, int param2) {
         this.siteId = siteId;
         this.structureType = structureType;
         this.owner = owner;
@@ -508,7 +382,7 @@ class Mine extends Structure {
 
     int incomeRate;
 
-    boolean rateIsMaxed(){
+    boolean rateIsMaxed() {
         return incomeRate == maxMineSize;
     }
 
@@ -529,14 +403,14 @@ class Predicates {
     public static final Predicate<Structure> mineStructure = s -> s instanceof Mine;
 
     public static final Predicate<Structure> emptyOrMineOrBarracks = s -> s instanceof NoStructure
-                                                                            || s instanceof ArcherBarracks
-                                                                            || s instanceof KnightBarracks
-                                                                            || s instanceof GiantBarracks
-                                                                            || s instanceof Mine;
+            || s instanceof ArcherBarracks
+            || s instanceof KnightBarracks
+            || s instanceof GiantBarracks
+            || s instanceof Mine;
 
-    public static final Predicate<Structure> factoryTypeArcher = s -> s instanceof ArcherBarracks;
-    public static final Predicate<Structure> factoryTypeKnight = s -> s instanceof KnightBarracks;
-    public static final Predicate<Structure> factoryTypeGiant = s -> s instanceof GiantBarracks;
+    public static final Predicate<Structure> ArcherBarracks = s -> s instanceof ArcherBarracks;
+    public static final Predicate<Structure> KnightBarracks = s -> s instanceof KnightBarracks;
+    public static final Predicate<Structure> GiantBarracks = s -> s instanceof GiantBarracks;
 
     public static final Predicate<Unit> friendlyUnit = s -> s.owner == Constants.FRIENDLY_OWNER;
     public static final Predicate<Unit> enemyUnit = s -> s.owner == Constants.ENEMY_OWNER;
@@ -547,231 +421,506 @@ class Predicates {
 
 }
 
-class Stats {
 
-    int knights;
-    int archers;
-    int giants;
-    int knightBarracks;
-    int archerBarracks;
-    int giantBarracks;
-    int towers;
-    int mines;
-    int income;
-    int gold;
-    int eKnights;
-    int eArchers;
-    int eGiants;
-    int eKnightBarracks;
-    int eArcherBarracks;
-    int eGiantBarracks;
-    int eTowers;
-    int eMines;
-    int eIncome;
+class GameData {
+    Units units;
+    Structures structures;
+    List<Site> sites;
 
-    int totalBarracks = knightBarracks + archerBarracks + giantBarracks;
-    int eTotalBarracks = eKnightBarracks + eArcherBarracks + eGiantBarracks;
-}
-
-class Query {
-
-
-    final int gold;
-    final int touchedSite;
-    final List<Structure> structures;
-    final List<Unit> units;
-    final List<Site> sites;
-
-    public Query(int gold, int touchedSite, List<Site> sites, List<Structure> structures, List<Unit> units){
-        this.gold = gold;
-        this.touchedSite = touchedSite;
-        this.structures = structures;
+    public GameData(Units units, Structures structures, List<Site> sites){
         this.units = units;
+        this.structures = structures;
         this.sites = sites;
     }
+}
 
-    public <T> T getClosestFromListToUnit(List<Structure> structures, Predicate<? super Structure> structureType,
-                                         Predicate<? super Structure> structureOwner, Predicate<? super Unit> unitType, Predicate<? super Unit> unitOwner ){
+class Units {
 
-        return structures.stream()
-                .filter( structureType )
-                .filter( structureOwner )
-                .min(Comparator.comparingDouble(s -> getDistanceFromUnitToSite(s.siteId, unitOwner, unitType)))
-                .map( s -> (T)s)
-                .orElse(null);
+    Queen friendlyQueen;
+    List<Knight> friendlyKnights;
+    List<Archer> friendlyArchers;
+    List<Giant> friendlyGiants;
+    Queen enemyQueen;
+    List<Knight> enemyKnights;
+    List<Archer> enemyArchers;
+    List<Giant> enemyGiants;
 
+    public Units(Queen queen, List<Knight> knights, List<Archer> archers, List<Giant> giants, Queen eQueen, List<Knight> eKnights, List<Archer> eArchers, List<Giant> eGiants){
+        this.friendlyQueen = queen;
+        this.friendlyKnights = knights;
+        this.friendlyArchers = archers;
+        this.friendlyGiants = giants;
+        this.enemyQueen = eQueen;
+        this.enemyKnights = eKnights;
+        this.enemyArchers = eArchers;
+        this.enemyGiants = eGiants;
     }
 
-    public <T> T getClosestSiteToUnit(Predicate<? super Structure> structureType, Predicate<? super Structure> structureOwner, Predicate<? super Unit> unitType, Predicate<? super Unit> unitOwner){
-        return getClosestFromListToUnit(this.structures, structureType, structureOwner, unitType, unitOwner);
+}
+
+class Structures {
+    List<ArcherBarracks> friendlyArcherBarracks;
+    List<KnightBarracks> friendlyKnightBarracks;
+    List<GiantBarracks> friendlyGiantBarracks;
+    List<Mine> friendlyMines;
+    List<Tower> friendlyTowers;
+    List<ArcherBarracks> enemyArcherBarracks;
+    List<KnightBarracks> enemyKnightBarracks;
+    List<GiantBarracks> enemyGiantBarracks;
+    List<Mine> enemyMines;
+    List<Tower> enemyTowers;
+    List<Structure> noStructures;
+
+    public Structures( List<ArcherBarracks> friendlyArcherBarracks, List<KnightBarracks> friendlyKnightBarracks,
+                       List<GiantBarracks> friendlyGiantBarracks, List<Mine> friendlyMines, List<Tower> friendlyTowers,
+                       List<ArcherBarracks> enemyArcherBarracks, List<KnightBarracks> enemyKnightBarracks,
+                       List<GiantBarracks> enemyGiantBarracks, List<Mine> enemyMines, List<Tower> enemyTowers,
+                       List<Structure> noStructures ){
+        this.friendlyArcherBarracks = friendlyArcherBarracks;
+        this.friendlyKnightBarracks = friendlyKnightBarracks;
+        this.friendlyGiantBarracks = friendlyGiantBarracks;
+        this.friendlyMines = friendlyMines;
+        this.friendlyTowers = friendlyTowers;
+        this.enemyArcherBarracks = enemyArcherBarracks;
+        this.enemyKnightBarracks = enemyKnightBarracks;
+        this.enemyGiantBarracks = enemyGiantBarracks;
+        this.enemyMines = enemyMines;
+        this.enemyTowers = enemyTowers;
+        this.noStructures  = noStructures;
+    }
+}
+
+class Grunt {
+
+    GameData gameData;
+
+    public Grunt(GameData gameData) {
+        this.gameData = gameData;
     }
 
-    public double getDistanceFromUnitToSite(int siteId, Predicate<? super Unit> unitType, Predicate<? super Unit> unitOwner ){
-
-        Unit unit = findUnitByTypeAndOwner(unitType, unitOwner );
-        Site site = getSiteById(siteId);
-
-        int yDiff = Math.max(unit.y, site.y) - Math.min(unit.y, site.y);
-        int xDiff = Math.max(unit.x, site.x) - Math.min(unit.x, site.x);
-
-        return Math.sqrt( (yDiff*yDiff) + (xDiff*xDiff) );
-
+    public void executeStrategy(QueenStrategy queenStrategy, TrainingStrategy trainingStrategy) {
+        getQueenCommand(queenStrategy).executeCommand();
+        getTrainCommand(trainingStrategy).executeCommand();
     }
 
-    public <T> T findUnitByTypeAndOwner( Predicate<? super Unit> unitType, Predicate<? super Unit> unitOwner ){
-        return this.units.stream()
-                .filter( unitType )
-                .filter( unitOwner )
-                .map( s -> (T)s)
-                .findFirst()
-                .orElse(null);
-
-    }
-
-    public <T> T getSiteById( int siteId){
-
-        return this.sites.stream()
-                .filter( s -> s.siteId == siteId)
-                .map( s -> (T)s)
-                .findAny()
-                .orElse(null);
-    }
-
-    public <T> T getStructureBySiteId(int siteId ){
-
-        return this.structures.stream()
-                .filter( s -> s.siteId == siteId)
-                .map( s -> (T)s)
-                .findAny()
-                .orElse(null);
-    }
-
-    public <T> List<T> getAllStructuresOfType(Predicate<? super Structure> factoryType, Predicate<? super Structure> structureOwner){
-
-        return this.structures.stream()
-                .filter( factoryType )
-                .filter( structureOwner )
-                .map( s -> (T)s)
-                .collect(Collectors.toList());
-
-    }
-
-    public <T> List<T> getAllUnitsOfType(List<Unit> units, Predicate<? super Unit> unitType, Predicate<? super Unit> unitOwner){
-        return units.stream()
-                .filter( unitType )
-                .filter( unitOwner )
-                .map( s -> (T)s)
-                .collect(Collectors.toList());
-    }
-
-    public String unitTypeOf(int unitType){
-        if( unitType == Constants.ARCHER){
-            return "Archer";
-        } else if( unitType == Constants.KNIGHT ){
-            return "Knight";
-        } else if ( unitType == Constants.QUEEN ){
-            return "Queen";
-        } else {
-            return "Giant";
+    private CommandInterface getQueenCommand(QueenStrategy queenStrategy) {
+        switch (queenStrategy) {
+            case BuildArcherBarracks: {
+                return new BuildArcherBarracksCommand(gameData);
+            }
+            case BuildGiantBarracks: {
+                return new BuildGiantBarracksCommand(gameData);
+            }
+            case BuildKnightBarracks: {
+                return new BuildKnightBarracksCommand(gameData);
+            }
+            case BuildTower: {
+                return new BuildTowerCommand(gameData);
+            }
+            case BuildMine:
+            default: {
+                return new BuildMineCommand(gameData);
+            }
         }
-
     }
 
-    public boolean areEqual(int val1, int... vals ){
-        return Arrays.stream(vals)
-                .allMatch(val -> val1 == val);
+    private CommandInterface getTrainCommand(TrainingStrategy trainingStrategy) {
+        switch (trainingStrategy) {
+            case TrainArcher: {
+                return new TrainArcherCommand(gameData);
+            }
+            case TrainGiant: {
+                return new TrainGiantCommand(gameData);
+            }
+            case TrainKnight:
+            default:
+                return new TrainKnightCommand(gameData);
+        }
     }
-
-    public boolean isLessOrEqual(int val1, int... vals ){
-        return Arrays.stream(vals)
-                .allMatch(val -> val1 <= val);
-    }
-
-    protected int getIncomeFromMines(List<Mine> mines){
-//        List<Mine> mines = query.getAllStructuresOfType(Predicates.mineStructure, Predicates.friendlyStructure);
-        int mineIncome =  mines.stream().reduce(0, (subtotal, mine) -> subtotal + mine.incomeRate, Integer::sum);
-        Logger.log("Mine Income: " + mineIncome);
-        return mineIncome;
-    }
-
-    protected Stats getStats(){
-
-        Stats stats = new Stats();
-
-        stats.knights = this.getAllUnitsOfType(this.units, Predicates.knightUnitType, Predicates.friendlyUnit).size();
-        stats.archers = this.getAllUnitsOfType(this.units, Predicates.archerUnitType, Predicates.friendlyUnit).size();
-        stats.giants = this.getAllUnitsOfType(this.units, Predicates.giantUnitType, Predicates.friendlyUnit).size();
-        stats.knightBarracks = this.getAllStructuresOfType(Predicates.factoryTypeKnight, Predicates.friendlyStructure).size();
-        stats.archerBarracks = this.getAllStructuresOfType(Predicates.factoryTypeArcher, Predicates.friendlyStructure).size();
-        stats.giantBarracks = this.getAllStructuresOfType(Predicates.factoryTypeGiant, Predicates.friendlyStructure).size();
-        stats.towers = this.getAllStructuresOfType(Predicates.towerStructure, Predicates.friendlyStructure).size();
-        stats.mines = this.getAllStructuresOfType(Predicates.mineStructure, Predicates.friendlyStructure).size();
-        stats.income = getIncomeFromMines(this.getAllStructuresOfType(Predicates.mineStructure, Predicates.friendlyStructure));
-        stats.gold = this.gold;
-        stats.eKnights = this.getAllUnitsOfType(this.units, Predicates.knightUnitType, Predicates.enemyUnit).size();
-        stats.eArchers = this.getAllUnitsOfType(this.units, Predicates.archerUnitType, Predicates.enemyUnit).size();
-        stats.eGiants = this.getAllUnitsOfType(this.units, Predicates.giantUnitType, Predicates.enemyUnit).size();
-        stats.eKnightBarracks = this.getAllStructuresOfType(Predicates.factoryTypeKnight, Predicates.friendlyStructure).size();
-        stats.eArcherBarracks = this.getAllStructuresOfType(Predicates.factoryTypeArcher, Predicates.friendlyStructure).size();
-        stats.eGiantBarracks = this.getAllStructuresOfType(Predicates.factoryTypeGiant, Predicates.friendlyStructure).size();
-        stats.eTowers = this.getAllStructuresOfType(Predicates.towerStructure, Predicates.enemyStructure).size();
-        stats.eMines = this.getAllStructuresOfType(Predicates.mineStructure, Predicates.enemyStructure).size();
-        stats.eIncome = getIncomeFromMines(this.getAllStructuresOfType(Predicates.mineStructure, Predicates.enemyStructure));
-
-        return stats;
-    }
-
 }
 
-class Commander {
+//    protected String getNextStructureType(){
 
-    Query query;
-    Grunt grunt;
-    Stats stats;
-
-    public Commander( int gold, int touchedSite, List<Site> sites, List<Structure> structures, List<Unit> units ){
-
-        Query query = new Query(gold, touchedSite, sites, structures, units);
-        this.grunt = new Grunt(query);
-        this.stats = query.getStats();
-        createStrategy();
-
-    }
-
-    void createStrategy(){
-        QueenStrategy queenStrategy = getQueenStrategy();
-        TrainingStrategy trainingStrategy = getTrainingStrategy();
-
-        this.grunt.executeStrategy(queenStrategy, trainingStrategy);
-
-    }
-
-    QueenStrategy getQueenStrategy(){
-
-        return QueenStrategy.BuildArcherFactory;
-
-//        Stats stats = query.getStats();
-//        if( haveNoStructures(stats) ){
-//            return QueenStrategy.CreateArcherFactory;
+//        if( query.isLessOrEqual(knights, archers, giants, towers, mines)) {
+//            return "BARRACKS-KNIGHT";
+//        } else if( query.isLessOrEqual(archers, knights, giants, towers, mines)) {
+//            return "BARRACKS-ARCHER";
+//        } else if( query.isLessOrEqual(giants, knights, archers, towers, mines)) {
+//            return "BARRACKS-GIANT";
+//        } else if( query.isLessOrEqual(towers, knights, archers, giants, mines)) {
+//            return "TOWER";
+//        } else {
+//            return "BARRACKS-KNIGHT";
 //        }
+//
+//    }
+
+//    protected void goToClosestTower(List<Structure> allTowers){
+//        Tower tower = query.getClosestFromListToUnit(allTowers, Predicates.towerStructure, Predicates.friendlyStructure, Predicates.queenUnitType, Predicates.friendlyUnit);
+//        System.out.println("BUILD " + tower.siteId + " TOWER");
+//    }
+
+//    protected void buildNextStructure(){
+//
+//        long numKnightFactories = query.structures.stream()
+//                .filter( s -> s.structureType != Constants.MINE && s.structureType != Constants.TOWER)
+//                .filter( s -> s.owner == Constants.FRIENDLY_OWNER)
+//                .count();
+//
+//        if( numKnightFactories == 0) {
+//            Structure targetSite = query.getClosestSiteToUnit(Predicates.emptyOrMineOrBarracks, Predicates.enemyOrNoOwner, Predicates.friendlyUnit, Predicates.queenUnitType);
+//            System.out.println("BUILD " + targetSite.siteId + " BARRACKS-ARCHER");
+//        } else {
+//            if( getIncomeFromMines() < 15 ){
+//                buildMine();
+//            } else {
+//                Structure targetSite = query.getClosestSiteToUnit(Predicates.emptyOrMineOrBarracks, Predicates.enemyOrNoOwner, Predicates.friendlyUnit, Predicates.queenUnitType);
+//                System.out.println("BUILD " + targetSite.siteId + " " + getNextStructureType());
+//            }
+//        }
+//    }
+
+//    private void buildMine(){
+//
+//        Mine closestMine = query.structures.stream()
+//                .filter( s -> s.structureType == Constants.MINE )
+//                .filter( s -> s.owner == Constants.FRIENDLY_OWNER )
+//                .map( s -> (Mine)s)
+//                .peek( s -> System.err.println("Mine " + s.siteId + ", Income: " + s.incomeRate + ", max: " + s.maxMineSize + ", goldRemaining: " + s.goldInMine) )
+//                .filter( s -> !s.rateIsMaxed() && s.goldInMine > 0)
+//                .min(Comparator.comparingDouble(s ->  query.getDistanceFromUnitToSite(s.siteId,Predicates.queenUnitType, Predicates.friendlyUnit)))
+//                .orElse(null);
+//
+//        if( Objects.isNull(closestMine)){
+//            Logger.log("No mines that are not maxed out");
+//
+//            Structure alternate = query.structures.stream()
+//                    .filter( s -> s.structureType != Constants.TOWER )
+//                    .filter( s -> s.owner != Constants.FRIENDLY_OWNER )
+//                    .filter( s -> s.goldInMine > 0 )
+//                    .peek( s -> System.err.println("Structure2 " + s.siteId + ", max mine: " + s.maxMineSize + ", goldRemaining: " + s.goldInMine) )
+//                    .min(Comparator.comparingDouble(s ->  query.getDistanceFromUnitToSite(s.siteId,Predicates.queenUnitType, Predicates.friendlyUnit)))
+//                    .orElse(null);
+//
+//            if( Objects.isNull(alternate)) {
+//                Structure alternate2 = query.structures.stream()
+//                        .filter( s -> s.structureType != Constants.TOWER )
+//                        .filter( s -> s.owner != Constants.FRIENDLY_OWNER )
+//                        .peek( s -> System.err.println("Structure3 " + s.siteId + ", max mine: " + s.maxMineSize + ", goldRemaining: " + s.goldInMine) )
+//                        .min(Comparator.comparingDouble(s ->  query.getDistanceFromUnitToSite(s.siteId,Predicates.queenUnitType, Predicates.friendlyUnit)))
+//                        .orElse(null);
+//                if( Objects.nonNull(alternate2) ){
+//                    System.out.println("BUILD " + alternate2.siteId + " " + getNextStructureType());
+//                } else {
+//                    Structure alternate3 = query.structures.stream()
+//                            .filter( s -> s.structureType == Constants.TOWER )
+//                            .filter( s -> s.owner == Constants.FRIENDLY_OWNER )
+//                            .peek( s -> System.err.println("Structure4 " + s.siteId + ", max mine: " + s.maxMineSize + ", goldRemaining: " + s.goldInMine) )
+//                            .min(Comparator.comparingDouble(s ->  query.getDistanceFromUnitToSite(s.siteId,Predicates.queenUnitType, Predicates.friendlyUnit)))
+//                            .orElse(null);
+//
+//                    Site site = query.getSiteById(alternate3.siteId);
+//                    System.out.println("MOVE " + site.x + " " + site.y );
+//                }
+//            } else {
+//                System.out.println("BUILD " + alternate.siteId + " MINE");
+//            }
+//        } else {
+//            Logger.log("Closest mine is site " + closestMine.siteId + ", isMaxed: " + closestMine.rateIsMaxed() + ", output: " + closestMine.incomeRate + ", Max: " + closestMine.maxMineSize);
+//            System.out.println("BUILD " + closestMine.siteId + " MINE");
+//        }
+//    }
+//
+//
+//    protected int getIncomeFromMines(){
+//        List<Mine> mines = query.getAllStructuresOfType(Predicates.mineStructure, Predicates.friendlyStructure);
+//        int mineIncome =  mines.stream().reduce(0, (subtotal, mine) -> subtotal + mine.incomeRate, Integer::sum);
+//        Logger.log("Mine Income: " + mineIncome);
+//        return mineIncome;
+//    }
+//}
+
+//class TrainingDecisionMaker {
+//
+//    Query query;
+//
+//    public TrainingDecisionMaker(Query query){
+//        this.query = query;
+//    }
+//
+//    public void executeCommand(QueenStrategy queenStrategy){
+//        decide();
+//    }
+//
+//    public void decide(){
+//
+//        int targetUnitType = getWhichTypeToBuild();
+//        int friendlyStructuresCount = query.getAllStructuresOfType(Predicates.barracksStructure, Predicates.friendlyStructure).size();
+//
+//        if( capableOfTraining( friendlyStructuresCount, targetUnitType ) ){
+//            String siteString;
+//            if( targetUnitType == Constants.GIANT){
+//                siteString = getGiantFactoryClosestToEnemyQueen();
+//            } else if ( targetUnitType == Constants.ARCHER ){
+//                siteString = getArcherFactoryClosestToFriendlyQueen();
+//            } else {
+//                siteString = getKnightFactoryClosestToEnemyQueen();
+//            }
+//            System.out.println("TRAIN " + siteString);
+//        } else {
+//            noTraining();
+//        }
+//    }
+//
+//    protected int getWhichTypeToBuild(){
+//
+//        int result = 0;
+//
+//        Stats stats = query.getStats();
+//
+//        Logger.log("Current Count: Knights: " + stats.knights + ", Archers: " + stats.archers + ", Giants: " + stats.giants);
+//
+//        if ( stats.eKnights > stats.archers || stats.archers < 3 ) {
+//            result = Constants.ARCHER;
+//        } else if( stats.eTowers > 0 && stats.giants <= 1 ) {
+//            result = Constants.GIANT;
+//        } else {
+//            result = Constants.KNIGHT;
+//        }
+//
+//        Logger.log("Training target: " + query.unitTypeOf(result));
+//        return result;
+//    }
+//
+//    private void noTraining(){
+//        Logger.log("cannot train");
+//        System.out.println("TRAIN");
+//    }
+//
+//    protected boolean capableOfTraining(int friendsCount, int targetUnitType){
+//        return friendsCount > 0
+//                && this.query.gold >= ( targetUnitType == Constants.ARCHER ? Constants.ARCHER_COST : targetUnitType == Constants.GIANT ? Constants.GIANT_COST : Constants.KNIGHT_COST )
+//                && factoryAvailable(targetUnitType);
+//    }
+//
+//    protected boolean factoryAvailable(int targetUnitType){
+//        if( targetUnitType == Constants.ARCHER ){
+//            return query.getAllStructuresOfType(Predicates.ArcherBarracks, Predicates.friendlyStructure).size() > 0;
+//        } else if (targetUnitType == Constants.KNIGHT){
+//            return query.getAllStructuresOfType(Predicates.KnightBarracks, Predicates.friendlyStructure).size() > 0;
+//        } else {
+//            return query.getAllStructuresOfType(Predicates.GiantBarracks, Predicates.friendlyStructure).size() > 0;
+//        }
+//    }
+//
+//    private String getKnightFactoryClosestToEnemyQueen(){
+//        KnightBarracks closestSite = query.getClosestFromListToUnit(query.getAllStructuresOfType(Predicates.KnightBarracks, Predicates.friendlyStructure),
+//                                                            Predicates.barracksStructure, Predicates.friendlyStructure, Predicates.queenUnitType, Predicates.enemyUnit);
+//        return Objects.nonNull(closestSite) ? "" + closestSite.siteId : "";
+//    }
+//
+//    private String getArcherFactoryClosestToFriendlyQueen(){
+//        ArcherBarracks closestSite = query.getClosestFromListToUnit(query.getAllStructuresOfType(Predicates.ArcherBarracks, Predicates.friendlyStructure),
+//                Predicates.barracksStructure, Predicates.friendlyStructure, Predicates.queenUnitType, Predicates.friendlyUnit);
+//        return Objects.nonNull(closestSite) ? "" + closestSite.siteId : "";
+//    }
+//
+//    private String getGiantFactoryClosestToEnemyQueen(){
+//        GiantBarracks closestSite = query.getClosestFromListToUnit(query.getAllStructuresOfType(Predicates.GiantBarracks, Predicates.friendlyStructure),
+//                Predicates.barracksStructure, Predicates.friendlyStructure, Predicates.queenUnitType, Predicates.enemyUnit);
+//        return Objects.nonNull(closestSite) ? "" + closestSite.siteId : "";
+//    }
+//
+//}
+
+//class Logger {
+//    public static void log(String msg){
+//        System.err.println(msg);
+//    }
+//
+//}
 
 
+    class Stats {
+
+        int knights;
+        int archers;
+        int giants;
+        int knightBarracks;
+        int archerBarracks;
+        int giantBarracks;
+        int towers;
+        int mines;
+        int income;
+        int gold;
+        int eKnights;
+        int eArchers;
+        int eGiants;
+        int eKnightBarracks;
+        int eArcherBarracks;
+        int eGiantBarracks;
+        int eTowers;
+        int eMines;
+        int eIncome;
+
+        int totalBarracks = knightBarracks + archerBarracks + giantBarracks;
+        int eTotalBarracks = eKnightBarracks + eArcherBarracks + eGiantBarracks;
     }
 
-    TrainingStrategy getTrainingStrategy(){
-        return TrainingStrategy.TrainArcher;
-    }
-
-    private boolean haveNoStructures(Stats stats){
-        return query.areEqual(0, stats.totalBarracks, stats.towers, stats.mines);
-    }
-
-}
+//class Query {
+//
+//
+//    final int gold;
+//    final int touchedSite;
+//    final List<Structure> structures;
+//    final List<Unit> units;
+//    final List<Site> sites;
+//
+//    public Query(int gold, int touchedSite, List<Site> sites, List<Structure> structures, List<Unit> units){
+//        this.gold = gold;
+//        this.touchedSite = touchedSite;
+//        this.structures = structures;
+//        this.units = units;
+//        this.sites = sites;
+//    }
+//
+//    public <T> T getClosestFromListToUnit(List<Structure> structures, Predicate<? extends Structure> structureType,
+//                                         Predicate<? extends Structure> structureOwner, Predicate<? extends Unit> unitType, Predicate<? extends Unit> unitOwner ){
+//
+//        return structures.stream()
+//                .filter( structureType )
+//                .filter( structureOwner )
+//                .min(Comparator.comparingDouble(s -> getDistanceFromUnitToSite(s.siteId, unitOwner, unitType)))
+//                .map( s -> (T)s)
+//                .orElse(null);
+//
+//    }
+//
+//    public <T> T getClosestSiteToUnit(Predicate<? super Structure> structureType, Predicate<? super Structure> structureOwner, Predicate<? super Unit> unitType, Predicate<? super Unit> unitOwner){
+//        return getClosestFromListToUnit(this.structures, structureType, structureOwner, unitType, unitOwner);
+//    }
+//
+//    public double getDistanceFromUnitToSite(int siteId, Predicate<? super Unit> unitType, Predicate<? super Unit> unitOwner ){
+//
+//        Unit unit = findUnitByTypeAndOwner(unitType, unitOwner );
+//        Site site = getSiteById(siteId);
+//
+//        int yDiff = Math.max(unit.y, site.y) - Math.min(unit.y, site.y);
+//        int xDiff = Math.max(unit.x, site.x) - Math.min(unit.x, site.x);
+//
+//        return Math.sqrt( (yDiff*yDiff) + (xDiff*xDiff) );
+//
+//    }
+//
+//    public <T> T findUnitByTypeAndOwner( Predicate<? super Unit> unitType, Predicate<? super Unit> unitOwner ){
+//        return this.units.stream()
+//                .filter( unitType )
+//                .filter( unitOwner )
+//                .map( s -> (T)s)
+//                .findFirst()
+//                .orElse(null);
+//
+//    }
+//
+//    public <T> T getSiteById( int siteId){
+//
+//        return this.sites.stream()
+//                .filter( s -> s.siteId == siteId)
+//                .map( s -> (T)s)
+//                .findAny()
+//                .orElse(null);
+//    }
+//
+//    public <T> T getStructureBySiteId(int siteId ){
+//
+//        return this.structures.stream()
+//                .filter( s -> s.siteId == siteId)
+//                .map( s -> (T)s)
+//                .findAny()
+//                .orElse(null);
+//    }
+//
+//    public <T> List<T> getAllStructuresOfType(Predicate<? super Structure> factoryType, Predicate<? super Structure> structureOwner){
+//
+//        return this.structures.stream()
+//                .filter( factoryType )
+//                .filter( structureOwner )
+//                .map( s -> (T)s)
+//                .collect(Collectors.toList());
+//
+//    }
+//
+//    public <T> List<T> getAllUnitsOfType(List<Unit> units, Predicate<? super Unit> unitType, Predicate<? super Unit> unitOwner){
+//        return units.stream()
+//                .filter( unitType )
+//                .filter( unitOwner )
+//                .map( s -> (T)s)
+//                .collect(Collectors.toList());
+//    }
+//
+//    public String unitTypeOf(int unitType){
+//        if( unitType == Constants.ARCHER){
+//            return "Archer";
+//        } else if( unitType == Constants.KNIGHT ){
+//            return "Knight";
+//        } else if ( unitType == Constants.QUEEN ){
+//            return "Queen";
+//        } else {
+//            return "Giant";
+//        }
+//
+//    }
+//
+//    public boolean areEqual(int val1, int... vals ){
+//        return Arrays.stream(vals)
+//                .allMatch(val -> val1 == val);
+//    }
+//
+//    public boolean isLessOrEqual(int val1, int... vals ){
+//        return Arrays.stream(vals)
+//                .allMatch(val -> val1 <= val);
+//    }
+//
+//    protected int getIncomeFromMines(List<Mine> mines){
+////        List<Mine> mines = query.getAllStructuresOfType(Predicates.mineStructure, Predicates.friendlyStructure);
+//        int mineIncome =  mines.stream().reduce(0, (subtotal, mine) -> subtotal + mine.incomeRate, Integer::sum);
+//        Logger.log("Mine Income: " + mineIncome);
+//        return mineIncome;
+//    }
+//
+//    protected Stats getStats(){
+//
+//        Stats stats = new Stats();
+//
+//        stats.knights = this.getAllUnitsOfType(this.units, Predicates.knightUnitType, Predicates.friendlyUnit).size();
+//        stats.archers = this.getAllUnitsOfType(this.units, Predicates.archerUnitType, Predicates.friendlyUnit).size();
+//        stats.giants = this.getAllUnitsOfType(this.units, Predicates.giantUnitType, Predicates.friendlyUnit).size();
+//        stats.knightBarracks = this.getAllStructuresOfType(Predicates.KnightBarracks, Predicates.friendlyStructure).size();
+//        stats.archerBarracks = this.getAllStructuresOfType(Predicates.ArcherBarracks, Predicates.friendlyStructure).size();
+//        stats.giantBarracks = this.getAllStructuresOfType(Predicates.GiantBarracks, Predicates.friendlyStructure).size();
+//        stats.towers = this.getAllStructuresOfType(Predicates.towerStructure, Predicates.friendlyStructure).size();
+//        stats.mines = this.getAllStructuresOfType(Predicates.mineStructure, Predicates.friendlyStructure).size();
+//        stats.income = getIncomeFromMines(this.getAllStructuresOfType(Predicates.mineStructure, Predicates.friendlyStructure));
+//        stats.gold = this.gold;
+//        stats.eKnights = this.getAllUnitsOfType(this.units, Predicates.knightUnitType, Predicates.enemyUnit).size();
+//        stats.eArchers = this.getAllUnitsOfType(this.units, Predicates.archerUnitType, Predicates.enemyUnit).size();
+//        stats.eGiants = this.getAllUnitsOfType(this.units, Predicates.giantUnitType, Predicates.enemyUnit).size();
+//        stats.eKnightBarracks = this.getAllStructuresOfType(Predicates.KnightBarracks, Predicates.friendlyStructure).size();
+//        stats.eArcherBarracks = this.getAllStructuresOfType(Predicates.ArcherBarracks, Predicates.friendlyStructure).size();
+//        stats.eGiantBarracks = this.getAllStructuresOfType(Predicates.GiantBarracks, Predicates.friendlyStructure).size();
+//        stats.eTowers = this.getAllStructuresOfType(Predicates.towerStructure, Predicates.enemyStructure).size();
+//        stats.eMines = this.getAllStructuresOfType(Predicates.mineStructure, Predicates.enemyStructure).size();
+//        stats.eIncome = getIncomeFromMines(this.getAllStructuresOfType(Predicates.mineStructure, Predicates.enemyStructure));
+//
+//        return stats;
+//    }
+//
+//}
 
 enum QueenStrategy {
-    BuildArcherFactory,
-    BuildKnightFactory,
-    BuildGiantFactory,
+    BuildArcherBarracks,
+    BuildKnightBarracks,
+    BuildGiantBarracks,
     BuildMine,
     BuildTower,
     Retreat
@@ -785,15 +934,15 @@ enum TrainingStrategy {
 
 interface CommandInterface {
     void executeCommand();
+
     void writeCommandMessage(String message);
 
 }
 
 abstract class AbstractCommand implements CommandInterface {
 
-    private Query query;
-
-    public AbstractCommand( Query query ){ this.query = query;}
+    public AbstractCommand() {
+    }
 
     public abstract void executeCommand();
 
@@ -801,28 +950,93 @@ abstract class AbstractCommand implements CommandInterface {
         System.out.println(message);
     }
 
-    public void writeLogMessage(String message){
+    public void writeLogMessage(String message) {
         System.err.println(message);
     }
 }
 
-class BuildArcherFactoryCommand extends AbstractCommand {
+class BuildArcherBarracksCommand extends AbstractCommand {
 
-    public BuildArcherFactoryCommand(Query query){
-        super(query);
+    GameData gameData;
+
+    BuildArcherBarracksCommand(GameData gameData) {
+        super();
+        this.gameData = gameData;
     }
 
     @Override
     public void executeCommand() {
 
     }
+}
 
+class BuildGiantBarracksCommand extends AbstractCommand {
+
+    GameData gameData;
+
+    public BuildGiantBarracksCommand(GameData gameData) {
+        super();
+        this.gameData = gameData;
+    }
+
+    @Override
+    public void executeCommand() {
+
+    }
+}
+
+class BuildKnightBarracksCommand extends AbstractCommand {
+
+    GameData gameData;
+
+    public BuildKnightBarracksCommand(GameData gameData) {
+        super();
+        this.gameData = gameData;
+    }
+
+    @Override
+    public void executeCommand() {
+
+    }
+}
+
+class BuildTowerCommand extends AbstractCommand {
+
+    GameData gameData;
+
+    public BuildTowerCommand(GameData gameData) {
+        super();
+        this.gameData = gameData;
+    }
+
+    @Override
+    public void executeCommand() {
+
+    }
+}
+
+class BuildMineCommand extends AbstractCommand {
+
+    GameData gameData;
+
+    public BuildMineCommand(GameData gameData) {
+        super();
+        this.gameData = gameData;
+    }
+
+    @Override
+    public void executeCommand() {
+
+    }
 }
 
 class TrainArcherCommand extends AbstractCommand {
 
-    public TrainArcherCommand(Query query ){
-        super(query);
+    GameData gameData;
+
+    public TrainArcherCommand(GameData gameData) {
+        super();
+        this.gameData = gameData;
     }
 
     @Override
@@ -834,8 +1048,11 @@ class TrainArcherCommand extends AbstractCommand {
 
 class TrainKnightCommand extends AbstractCommand {
 
-    public TrainKnightCommand(Query query) {
-        super(query);
+    GameData gameData;
+
+    public TrainKnightCommand(GameData gameData) {
+        super();
+        this.gameData = gameData;
     }
 
     @Override
@@ -846,9 +1063,11 @@ class TrainKnightCommand extends AbstractCommand {
 
 class TrainGiantCommand extends AbstractCommand {
 
-    public TrainGiantCommand(Query query) {
-        super(query);
-        writeLogMessage("TRAINING GIANT");
+    GameData gameData;
+
+    public TrainGiantCommand(GameData gameData) {
+        super();
+        this.gameData = gameData;
     }
 
     @Override
