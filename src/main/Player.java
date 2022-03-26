@@ -426,6 +426,50 @@ class GameData {
         this.structures = structures;
         this.sites = sites;
     }
+
+
+    public Site getSiteFromStructure(int siteId, List<Site> sites){
+        return sites.stream().filter( s -> s.siteId == siteId).findFirst().orElse(null);
+    }
+
+    public Structure getStructureFromSite(int siteId, List<? extends Structure> structures){
+        return structures.stream().filter( s -> s.siteId == siteId).findFirst().orElse(null);
+    }
+
+    public double getDistanceFromUnitToSite(Site site, Unit unit ){
+
+        if( Objects.isNull(site) ){
+            return 10000000d;
+        }
+
+        int yDiff = Math.max(unit.y, site.y) - Math.min(unit.y, site.y);
+        int xDiff = Math.max(unit.x, site.x) - Math.min(unit.x, site.x);
+        return Math.sqrt( (yDiff*yDiff) + (xDiff*xDiff) );
+    }
+
+    public Site getClosestOf(List<? extends Structure> structures){
+        if( structures.isEmpty() ){ return null; }
+
+        return structures.stream()
+                .map( s -> getSiteFromStructure(s.siteId, this.sites))
+                .min(Comparator.comparingDouble(site -> getDistanceFromUnitToSite(site, this.units.friendlyQueen)))
+                .get();
+
+    }
+
+    public Site getStructureClosestToQueen(){
+        Site closestNoStructure = getClosestOf(this.structures.noStructures);
+        Site closestArcherBarracks = getClosestOf(this.structures.enemyArcherBarracks);
+        Site closestKnightBarracks = getClosestOf(this.structures.enemyKnightBarracks);
+        Site closestGiantBarracks = getClosestOf(this.structures.enemyGiantBarracks);
+        Site closestMines = getClosestOf(this.structures.enemyMines);
+        return Stream.of(closestNoStructure, closestArcherBarracks, closestKnightBarracks, closestGiantBarracks, closestMines)
+                .filter(Objects::nonNull)
+                .map( s -> getSiteFromStructure(s.siteId, this.sites))
+                .min(Comparator.comparingDouble(site -> getDistanceFromUnitToSite(site, this.units.friendlyQueen)))
+                .get();
+
+    }
 }
 
 class Units {
@@ -574,49 +618,6 @@ abstract class AbstractCommand implements CommandInterface {
     public void writeLogMessage(String message) {
         System.err.println(message);
     }
-
-    public Site getSiteFromStructure(int siteId, List<Site> sites){
-        return sites.stream().filter( s -> s.siteId == siteId).findFirst().orElse(null);
-    }
-
-    public Structure getStructureFromSite(int siteId, List<? extends Structure> structures){
-        return structures.stream().filter( s -> s.siteId == siteId).findFirst().orElse(null);
-    }
-
-    public double getDistanceFromUnitToSite(Site site, Unit unit ){
-
-        if( Objects.isNull(site) ){
-            return 10000000d;
-        }
-
-        int yDiff = Math.max(unit.y, site.y) - Math.min(unit.y, site.y);
-        int xDiff = Math.max(unit.x, site.x) - Math.min(unit.x, site.x);
-        return Math.sqrt( (yDiff*yDiff) + (xDiff*xDiff) );
-    }
-
-    public Site getClosestOf(List<? extends Structure> structures){
-        if( structures.isEmpty() ){ return null; }
-
-        return structures.stream()
-                .map( s -> getSiteFromStructure(s.siteId, gameData.sites))
-                .min(Comparator.comparingDouble(site -> getDistanceFromUnitToSite(site, gameData.units.friendlyQueen)))
-                .get();
-
-    }
-
-    public Site getStructureClosestToQueen(){
-        Site closestNoStructure = getClosestOf(gameData.structures.noStructures);
-        Site closestArcherBarracks = getClosestOf(gameData.structures.enemyArcherBarracks);
-        Site closestKnightBarracks = getClosestOf(gameData.structures.enemyKnightBarracks);
-        Site closestGiantBarracks = getClosestOf(gameData.structures.enemyGiantBarracks);
-        Site closestMines = getClosestOf(gameData.structures.enemyMines);
-        return Stream.of(closestNoStructure, closestArcherBarracks, closestKnightBarracks, closestGiantBarracks, closestMines)
-                .filter(Objects::nonNull)
-                .map( s -> getSiteFromStructure(s.siteId, gameData.sites))
-                .min(Comparator.comparingDouble(site -> getDistanceFromUnitToSite(site, gameData.units.friendlyQueen)))
-                .get();
-
-    }
 }
 
 class BuildArcherBarracksCommand extends AbstractCommand {
@@ -628,7 +629,7 @@ class BuildArcherBarracksCommand extends AbstractCommand {
 
     @Override
     public void executeCommand() {
-        Site closestSite = getStructureClosestToQueen();
+        Site closestSite = gameData.getStructureClosestToQueen();
         writeCommandMessage("BUILD " + closestSite.siteId + " BARRACKS-ARCHER");
     }
 }
@@ -641,7 +642,7 @@ class BuildGiantBarracksCommand extends AbstractCommand {
 
     @Override
     public void executeCommand() {
-        Site closestSite = getStructureClosestToQueen();
+        Site closestSite = gameData.getStructureClosestToQueen();
         writeCommandMessage("BUILD " + closestSite.siteId + " BARRACKS-GIANT");
     }
 }
@@ -654,7 +655,7 @@ class BuildKnightBarracksCommand extends AbstractCommand {
 
     @Override
     public void executeCommand() {
-        Site closestSite = getStructureClosestToQueen();
+        Site closestSite = gameData.getStructureClosestToQueen();
         writeCommandMessage("BUILD " + closestSite.siteId + " BARRACKS-KNIGHT");
     }
 }
@@ -667,7 +668,7 @@ class BuildTowerCommand extends AbstractCommand {
 
     @Override
     public void executeCommand() {
-        Site closestSite = getStructureClosestToQueen();
+        Site closestSite = gameData.getStructureClosestToQueen();
         writeCommandMessage("BUILD " + closestSite.siteId + " TOWER");
     }
 }
@@ -680,14 +681,14 @@ class BuildMineCommand extends AbstractCommand {
 
     @Override
     public void executeCommand() {
-        Site closestSite = getStructureClosestToQueen();
-        Site closestFriendlyMine = getClosestOf(gameData.structures.friendlyMines);
+        Site closestSite = gameData.getStructureClosestToQueen();
+        Site closestFriendlyMine = gameData.getClosestOf(gameData.structures.friendlyMines);
 
         List<Site> potentialSites = new ArrayList<>();
         potentialSites.add(closestSite);
 
         if (Objects.nonNull(closestFriendlyMine)) {
-            Mine closestMine = (Mine) getStructureFromSite(closestFriendlyMine.siteId, gameData.structures.friendlyMines);
+            Mine closestMine = (Mine) gameData.getStructureFromSite(closestFriendlyMine.siteId, gameData.structures.friendlyMines);
             if (!closestMine.rateIsMaxed()) {
                 potentialSites.add(closestFriendlyMine);
             }
@@ -695,7 +696,7 @@ class BuildMineCommand extends AbstractCommand {
 
         Site target = potentialSites.stream()
             .filter(Objects::nonNull)
-            .min(Comparator.comparingDouble(site -> getDistanceFromUnitToSite(site, gameData.units.friendlyQueen)))
+            .min(Comparator.comparingDouble(site -> gameData.getDistanceFromUnitToSite(site, gameData.units.friendlyQueen)))
             .get();
 
         writeCommandMessage("BUILD " + target.siteId + " MINE");
@@ -712,7 +713,7 @@ class TrainArcherCommand extends AbstractCommand {
     @Override
     public void executeCommand() {
         if( !gameData.structures.friendlyArcherBarracks.isEmpty()){
-            Site closest = getClosestOf(gameData.structures.friendlyArcherBarracks);
+            Site closest = gameData.getClosestOf(gameData.structures.friendlyArcherBarracks);
             writeCommandMessage("TRAIN " + closest.siteId);
         } else {
             writeCommandMessage("TRAIN");
@@ -730,7 +731,7 @@ class TrainKnightCommand extends AbstractCommand {
     @Override
     public void executeCommand() {
         if( !gameData.structures.friendlyKnightBarracks.isEmpty()){
-            Site closest = getClosestOf(gameData.structures.friendlyKnightBarracks);
+            Site closest = gameData.getClosestOf(gameData.structures.friendlyKnightBarracks);
             writeCommandMessage("TRAIN " + closest.siteId);
         } else {
             writeCommandMessage("TRAIN");
@@ -747,7 +748,7 @@ class TrainGiantCommand extends AbstractCommand {
     @Override
     public void executeCommand() {
         if( !gameData.structures.friendlyGiantBarracks.isEmpty()){
-            Site closest = getClosestOf(gameData.structures.friendlyGiantBarracks);
+            Site closest = gameData.getClosestOf(gameData.structures.friendlyGiantBarracks);
             writeCommandMessage("TRAIN " + closest.siteId);
         } else {
             writeCommandMessage("TRAIN");
@@ -763,14 +764,12 @@ class RetreatCommand extends AbstractCommand {
 
     @Override
     public void executeCommand() {
-
         if( gameData.structures.friendlyTowers.size() == 0){
-            Site closest = getClosestOf(gameData.structures.friendlyGiantBarracks);
+            Site closest = gameData.getClosestOf(gameData.structures.friendlyGiantBarracks);
             writeCommandMessage("BUILD " + closest.siteId + " TOWER");
         } else {
-            Site site = getClosestOf(gameData.structures.friendlyTowers);
+            Site site = gameData.getClosestOf(gameData.structures.friendlyTowers);
             writeCommandMessage("MOVE " + site.x + " " + site.y);
         }
-
     }
 }
