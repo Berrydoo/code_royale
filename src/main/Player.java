@@ -1,6 +1,7 @@
 package main;
 
 import java.util.*;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 
@@ -187,7 +188,7 @@ class Commander {
 
     QueenStrategy getQueenStrategy() {
 
-        if (stressedByAttack()) {
+        if( enemyUnitsAreClose()){
             return QueenStrategy.Retreat;
         }
         if (haveLimitedIncome(7)) {
@@ -202,7 +203,7 @@ class Commander {
         if (haveNoArcherBarracks()) {
             return QueenStrategy.BuildArcherBarracks;
         }
-        if (haveLimitedIncome(15)) {
+        if (haveLimitedIncome(12)) {
             return QueenStrategy.BuildMine;
         }
         if (enemyHasTowers()) {
@@ -264,6 +265,18 @@ class Commander {
     private boolean haveKnightsLessThanThreshold(int threshold){
         return gameData.units.friendlyKnights.size() < threshold;
     }
+    private boolean enemyUnitsAreClose(){
+        List<Knight> closeEKnights =  gameData.units.enemyKnights.stream()
+                .filter( ek -> gameData.getDistanceFromUnitToUnit(ek, gameData.units.friendlyQueen) < 300 )
+                .collect(Collectors.toList());
+        List<Queen> closeEqueen = Collections.singletonList(gameData.units.enemyQueen).stream()
+                .filter( ek -> gameData.getDistanceFromUnitToUnit(ek, gameData.units.friendlyQueen) < 300 )
+                .collect(Collectors.toList());
+
+        return closeEKnights.size() + closeEqueen.size() > 0;
+
+    }
+
 }
 
 class Site {
@@ -447,6 +460,13 @@ class GameData {
         return Math.sqrt( (yDiff*yDiff) + (xDiff*xDiff) );
     }
 
+    public double getDistanceFromUnitToUnit(Unit unit1, Unit unit2 ){
+
+        int yDiff = Math.max(unit1.y, unit2.y) - Math.min(unit1.y, unit2.y);
+        int xDiff = Math.max(unit1.x, unit2.x) - Math.min(unit1.x, unit2.x);
+        return Math.sqrt( (yDiff*yDiff) + (xDiff*xDiff) );
+    }
+
     public Site getClosestOf(List<? extends Structure> structures){
         if( structures.isEmpty() ){ return null; }
 
@@ -463,12 +483,12 @@ class GameData {
         Site closestKnightBarracks = getClosestOf(this.structures.enemyKnightBarracks);
         Site closestGiantBarracks = getClosestOf(this.structures.enemyGiantBarracks);
         Site closestMines = getClosestOf(this.structures.enemyMines);
-        return Stream.of(closestNoStructure, closestArcherBarracks, closestKnightBarracks, closestGiantBarracks, closestMines)
+        Optional<Site> optSite = Stream.of(closestNoStructure, closestArcherBarracks, closestKnightBarracks, closestGiantBarracks, closestMines)
                 .filter(Objects::nonNull)
                 .map( s -> getSiteFromStructure(s.siteId, this.sites))
-                .min(Comparator.comparingDouble(site -> getDistanceFromUnitToSite(site, this.units.friendlyQueen)))
-                .get();
+                .min(Comparator.comparingDouble(site -> getDistanceFromUnitToSite(site, this.units.friendlyQueen)));
 
+        return optSite.orElseGet(() -> getClosestOf(this.structures.friendlyTowers));
     }
 }
 
@@ -765,11 +785,18 @@ class RetreatCommand extends AbstractCommand {
     @Override
     public void executeCommand() {
         if( gameData.structures.friendlyTowers.size() == 0){
-            Site closest = gameData.getClosestOf(gameData.structures.friendlyGiantBarracks);
+            Site closest = gameData.getStructureClosestToQueen();
             writeCommandMessage("BUILD " + closest.siteId + " TOWER");
         } else {
             Site site = gameData.getClosestOf(gameData.structures.friendlyTowers);
-            writeCommandMessage("MOVE " + site.x + " " + site.y);
+            Tower tower = (Tower)gameData.getStructureFromSite(site.siteId, gameData.structures.friendlyTowers );
+            if( tower.attackRadius < 500){
+                writeCommandMessage("BUILD " + site.siteId + " TOWER");
+            } else {
+                Site closestSite = gameData.getStructureClosestToQueen();
+                writeCommandMessage("BUILD " + closestSite.siteId + " TOWER");
+            }
+
         }
     }
 }
