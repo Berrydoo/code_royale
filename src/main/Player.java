@@ -204,10 +204,7 @@ class Commander {
         if (haveNoArcherBarracks()) {
             return QueenStrategy.BuildArcherBarracks;
         }
-        if (haveLimitedIncome(12)) {
-            return QueenStrategy.BuildMine;
-        }
-        if (enemyHasMoreTowersThanThreshold(3)
+        if (enemyHasMoreTowersThanThreshold(0)
                 && haveNoGiantBarracks()) {
             return QueenStrategy.BuildGiantBarracks;
         }
@@ -220,13 +217,12 @@ class Commander {
         if(haveKnightsLessThanThreshold(4)){
             return TrainingStrategy.TrainKnight;
         }
-        if (haveNoArchers()) {
+        if (haveFewerArchersThanEnemyKnights()
+                || haveArchersLessThanThreshold(4)) {
             return TrainingStrategy.TrainArcher;
         }
-        if (haveFewerArchersThanEnemyKnights()) {
-            return TrainingStrategy.TrainArcher;
-        }
-        if (enemyHasMoreTowersThanThreshold(3)) {
+        if (enemyHasMoreTowersThanThreshold(0)
+                && haveGiantsLessThanThreshold(3)) {
             return TrainingStrategy.TrainGiant;
         }
         return TrainingStrategy.TrainKnight;
@@ -249,36 +245,35 @@ class Commander {
         if( gameData.structures.enemyTowers.size() == 0){
             return false;
         }
-        Tower closetETower = (Tower)gameData.getClosestOf(gameData.structures.enemyTowers);
+        Tower closetETower = (Tower)gameData.getClosestStructureOf(gameData.structures.enemyTowers);
 
         return gameData.getDistanceBetween(closetETower, gameData.units.friendlyQueen) < closetETower.attackRadius;
 
     }
-
     private boolean haveNoKnightBarracks() {
         return gameData.structures.friendlyKnightBarracks.size() == 0;
     }
-
     private boolean enemyHasMoreTowersThanThreshold(int threshold) {
         return gameData.structures.enemyTowers.size() > threshold;
     }
-
-    private boolean haveNoArchers() {
-        return gameData.units.friendlyArchers.size() == 0;
-    }
-
     private boolean haveFewerArchersThanEnemyKnights() {
         return gameData.units.friendlyArchers.size() < gameData.units.enemyKnights.size();
+    }
+    private boolean haveArchersLessThanThreshold(int threshold){
+        return gameData.units.friendlyArchers.size() < threshold;
     }
     private boolean haveKnightsLessThanThreshold(int threshold){
         return gameData.units.friendlyKnights.size() < threshold;
     }
+    private boolean haveGiantsLessThanThreshold(int threshold){
+        return gameData.units.friendlyGiants.size() < threshold;
+    }
     private boolean enemyUnitsAreClose(){
         List<Knight> closeEKnights =  gameData.units.enemyKnights.stream()
-                .filter( ek -> gameData.getDistanceBetween(ek, gameData.units.friendlyQueen) < 200 )
+                .filter( ek -> gameData.getDistanceBetween(ek, gameData.units.friendlyQueen) < 350 )
                 .collect(Collectors.toList());
         List<Queen> closeEqueen = Stream.of(gameData.units.enemyQueen)
-                .filter( ek -> gameData.getDistanceBetween(ek, gameData.units.friendlyQueen) < 300 )
+                .filter( ek -> gameData.getDistanceBetween(ek, gameData.units.friendlyQueen) < 200 )
                 .collect(Collectors.toList());
 
         return closeEKnights.size() + closeEqueen.size() > 0;
@@ -440,9 +435,10 @@ class GameData {
             return 10000000d;
         }
 
-        int yDiff = Math.max(unit.y, structure.y) - Math.min(unit.y, structure.y);
-        int xDiff = Math.max(unit.x, structure.x) - Math.min(unit.x, structure.x);
-        return Math.sqrt( (yDiff*yDiff) + (xDiff*xDiff) );
+        int yDelta = unit.y - structure.y;
+        int xDelta = unit.x - structure.x;
+
+        return Math.sqrt( (yDelta*yDelta) + (xDelta*xDelta) );
     }
 
     public double getDistanceBetween(Unit unit1, Unit unit2 ){
@@ -459,13 +455,18 @@ class GameData {
         return Math.sqrt( (yDiff*yDiff) + (xDiff*xDiff) );
     }
 
-    public Structure getClosestOf(List<? extends Structure> structures){
+    public Structure getClosestStructureOf(List<? extends Structure> structures){
         if( structures.isEmpty() ){ return null; }
 
         return structures.stream()
            .min(Comparator.comparingDouble(structure -> getDistanceBetween( structure, this.units.friendlyQueen))).get();
     }
+    public Unit getClosestUnitOf(List<? extends Unit> units){
+        if( units.isEmpty() ){ return null; }
 
+        return units.stream()
+                .min(Comparator.comparingDouble(unit -> getDistanceBetween( unit, this.units.friendlyQueen))).get();
+    }
     public List<? extends Structure> getStructuresOutOfTowerRange(List<? extends Structure> structures) {
         if( this.structures.enemyTowers.isEmpty() ){
             System.err.println("No enemy towers");
@@ -488,11 +489,11 @@ class GameData {
     }
 
     public List<Structure> getClosestPotentialStructures(){
-        Structure closestNoStructure = getClosestOf(this.structures.noStructures);
-        Structure closestArcherBarracks = getClosestOf(this.structures.enemyArcherBarracks);
-        Structure closestKnightBarracks = getClosestOf(this.structures.enemyKnightBarracks);
-        Structure closestGiantBarracks = getClosestOf(this.structures.enemyGiantBarracks);
-        Structure closestMines = getClosestOf(this.structures.enemyMines);
+        Structure closestNoStructure = getClosestStructureOf(this.structures.noStructures);
+        Structure closestArcherBarracks = getClosestStructureOf(this.structures.enemyArcherBarracks);
+        Structure closestKnightBarracks = getClosestStructureOf(this.structures.enemyKnightBarracks);
+        Structure closestGiantBarracks = getClosestStructureOf(this.structures.enemyGiantBarracks);
+        Structure closestMines = getClosestStructureOf(this.structures.enemyMines);
         return Arrays.asList(closestNoStructure, closestArcherBarracks, closestKnightBarracks, closestGiantBarracks, closestMines);
     }
 
@@ -517,13 +518,13 @@ class GameData {
             return optionalStructure.get();
         } else {
             if( this.structures.friendlyTowers.size() > 0){
-                return getClosestOf(this.structures.friendlyTowers);
+                return getClosestStructureOf(this.structures.friendlyTowers);
             } else if (this.structures.friendlyArcherBarracks.size() > 0){
-                return getClosestOf(this.structures.friendlyArcherBarracks);
+                return getClosestStructureOf(this.structures.friendlyArcherBarracks);
             } else if (this.structures.friendlyKnightBarracks.size() > 0){
-                return getClosestOf(this.structures.friendlyKnightBarracks);
+                return getClosestStructureOf(this.structures.friendlyKnightBarracks);
             } else if (this.structures.friendlyGiantBarracks.size() > 0) {
-                return getClosestOf(this.structures.friendlyGiantBarracks);
+                return getClosestStructureOf(this.structures.friendlyGiantBarracks);
             } else {
                 System.err.println("No friendly or enemy or empty structures available");
                 return null;
@@ -750,14 +751,14 @@ class BuildMineCommand extends AbstractCommand {
     @Override
     public void executeCommand() {
         List<Structure> potentials = gameData.getAllPotentialStructures().stream().filter( s -> s.goldInMine != 0).collect(Collectors.toList());
-        Structure closestSite = gameData.getClosestOf(potentials);
-        Mine closestFriendlyMine = (Mine)gameData.getClosestOf(gameData.structures.friendlyMines);
+        Structure closestSite = gameData.getClosestStructureOf(potentials);
+        Mine closestFriendlyMine = (Mine)gameData.getClosestStructureOf(gameData.structures.friendlyMines);
 
         List<Structure> potentialSites = new ArrayList<>();
         potentialSites.add(closestSite);
 
         if (Objects.nonNull(closestFriendlyMine)) {
-            if (!closestFriendlyMine.rateIsMaxed() ) {
+            if (!closestFriendlyMine.rateIsMaxed() && closestFriendlyMine.goldInMine > 0 ) {
                 potentialSites.add(closestFriendlyMine);
             }
         }
@@ -785,7 +786,7 @@ class TrainArcherCommand extends AbstractCommand {
     @Override
     public void executeCommand() {
         if( !gameData.structures.friendlyArcherBarracks.isEmpty()){
-            Structure closest = gameData.getClosestOf(gameData.structures.friendlyArcherBarracks);
+            Structure closest = gameData.getClosestStructureOf(gameData.structures.friendlyArcherBarracks);
             writeCommandMessage("TRAIN " + closest.siteId);
         } else {
             writeCommandMessage("TRAIN");
@@ -804,7 +805,7 @@ class TrainKnightCommand extends AbstractCommand {
     @Override
     public void executeCommand() {
         if( !gameData.structures.friendlyKnightBarracks.isEmpty()){
-            Structure closest = gameData.getClosestOf(gameData.structures.friendlyKnightBarracks);
+            Structure closest = gameData.getClosestStructureOf(gameData.structures.friendlyKnightBarracks);
             writeCommandMessage("TRAIN " + closest.siteId);
         } else {
             writeCommandMessage("TRAIN");
@@ -822,7 +823,7 @@ class TrainGiantCommand extends AbstractCommand {
     @Override
     public void executeCommand() {
         if( !gameData.structures.friendlyGiantBarracks.isEmpty()){
-            Structure closest = gameData.getClosestOf(gameData.structures.friendlyGiantBarracks);
+            Structure closest = gameData.getClosestStructureOf(gameData.structures.friendlyGiantBarracks);
             writeCommandMessage("TRAIN " + closest.siteId);
         } else {
             writeCommandMessage("TRAIN");
@@ -839,18 +840,30 @@ class RetreatCommand extends AbstractCommand {
 
     @Override
     public void executeCommand() {
-        if( gameData.structures.friendlyTowers.size() == 0){
-            Structure closest = gameData.getTargetClosestToQueen();
-            writeCommandMessage("BUILD " + closest.siteId + " TOWER");
-        } else {
-            Tower tower = (Tower)gameData.getClosestOf(gameData.structures.friendlyTowers);
-            if( tower.attackRadius < 300){
-                writeCommandMessage("BUILD " + tower.siteId + " TOWER");
-            } else {
-                Structure closestSite = gameData.getTargetClosestToQueen();
-                writeCommandMessage("BUILD " + closestSite.siteId + " TOWER");
-            }
 
+        Knight eKnight = (Knight) gameData.getClosestUnitOf(gameData.units.enemyKnights);
+        Queen fQueen = gameData.units.friendlyQueen;
+        Queen eQueen = gameData.units.enemyQueen;
+
+        List<Unit> eUnits = new ArrayList<>();
+        if( Objects.nonNull(eKnight)) {
+            eUnits.add(eKnight);
+            eUnits.add(eQueen);
+            Unit closestEnemy = gameData.getClosestUnitOf(eUnits);
+
+            List<Structure> potential;
+            if (closestEnemy.x >= fQueen.x) {
+                potential = gameData.getAllPotentialStructures().stream().filter(s -> s.x < fQueen.x).collect(Collectors.toList());
+            } else {
+                potential = gameData.getAllPotentialStructures().stream().filter(s -> s.x > fQueen.x).collect(Collectors.toList());
+            }
+            if (!potential.isEmpty()) {
+                Structure closest = gameData.getClosestStructureOf(potential);
+                writeCommandMessage("BUILD " + closest.siteId + " TOWER");
+            } else {
+                Structure closest = gameData.getClosestStructureOf(gameData.structures.enemyMines);
+                writeCommandMessage("BUILD " + closest.siteId + " TOWER");
+            }
         }
     }
 }
@@ -871,34 +884,26 @@ class RetargetCommand extends AbstractCommand {
             if ( gameData.structures.friendlyGiantBarracks.size() == 0) {
                 Structure target;
                 if(gameData.structures.friendlyTowers.size() > 0 ){
-                    target = gameData.getClosestOf(gameData.structures.friendlyTowers);
+                    target = gameData.getClosestStructureOf(gameData.structures.friendlyTowers);
                 } else if(gameData.structures.friendlyKnightBarracks.size() > 0 ){
-                    target = gameData.getClosestOf(gameData.structures.friendlyKnightBarracks);
+                    target = gameData.getClosestStructureOf(gameData.structures.friendlyKnightBarracks);
                 } else if(gameData.structures.friendlyArcherBarracks.size() > 0 ){
-                    target = gameData.getClosestOf(gameData.structures.friendlyArcherBarracks);
+                    target = gameData.getClosestStructureOf(gameData.structures.friendlyArcherBarracks);
                 } else {
                     target = gameData.getTargetClosestToQueen();
                 }
                 writeCommandMessage("BUILD " + target.siteId + " BARRACKS-GIANT" );
             } else {
-                Structure target;
-                if(gameData.structures.friendlyTowers.size() > 0 ){
-                    target = gameData.getClosestOf(gameData.structures.friendlyTowers);
-                    writeCommandMessage("BUILD " + target.siteId + " TOWER" );
-                } else if(gameData.structures.friendlyArcherBarracks.size() > 0 ){
-                    target = gameData.getClosestOf(gameData.structures.friendlyArcherBarracks);
-                    writeCommandMessage("MOVE " + target.x + " " + target.y);
-                } else if(gameData.structures.friendlyKnightBarracks.size() > 0 ){
-                    target = gameData.getClosestOf(gameData.structures.friendlyKnightBarracks);
-                    writeCommandMessage("MOVE " + target.x + " " + target.y);
+                Structure target = gameData.getClosestStructureOf(gameData.structures.enemyTowers);
+                if( target.x >= gameData.units.friendlyQueen.x ){
+                    writeCommandMessage("MOVE " + (gameData.units.friendlyQueen.x - 400) + " " + gameData.units.friendlyQueen.y );
                 } else {
-                    target = gameData.getTargetClosestToQueen();
-                    writeCommandMessage("BUILD " + target.siteId + "BARRACKS-KNIGHT" );
+                    writeCommandMessage("MOVE " + (gameData.units.friendlyQueen.x + 400) + " " + gameData.units.friendlyQueen.y );
                 }
             }
         } else {
-            Structure target = gameData.getClosestOf(safeSites);
-            writeCommandMessage("MOVE " + target.x + " " + target.y);
+            Structure target = gameData.getClosestStructureOf(safeSites);
+            writeCommandMessage("BUILD " + target.siteId + " BARRACKS-GIANT");
         }
     }
 }
